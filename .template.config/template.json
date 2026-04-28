@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "EngBett",
+  "classifications": [
+    "Web",
+    "API",
+    "DDD",
+    "Clean Architecture"
+  ],
+  "identity": "EngBett.DDD.Template",
+  "name": "DDD .NET Template",
+  "shortName": "ddd-template",
+  "description": "A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core, and optional Minimal APIs or FastEndpoints support.",
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "sourceName": "Template",
+  "preferNameDirectory": true,
+  "symbols": {
+    "apiStyle": {
+      "type": "parameter",
+      "description": "The API style to use: 'controllers' (traditional MVC), 'minimal' (Minimal APIs), or 'fastendpoints' (FastEndpoints library).",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "controllers",
+          "description": "Traditional MVC controllers (default)"
+        },
+        {
+          "choice": "minimal",
+          "description": "ASP.NET Core Minimal APIs"
+        },
+        {
+          "choice": "fastendpoints",
+          "description": "FastEndpoints (https://fast-endpoints.com/)"
+        }
+      ],
+      "defaultValue": "controllers"
+    },
+    "useControllers": {
+      "type": "computed",
+      "value": "(apiStyle == \"controllers\")"
+    },
+    "useMinimal": {
+      "type": "computed",
+      "value": "(apiStyle == \"minimal\")"
+    },
+    "useFastEndpoints": {
+      "type": "computed",
+      "value": "(apiStyle == \"fastendpoints\")"
+    }
+  },
+  "sources": [
+    {
+      "modifiers": [
+        {
+          "condition": "(useControllers)",
+          "rename": {
+            "Template.Api/Program.Controllers.cs": "Template.Api/Program.cs",
+            "Template.Api/Template.Api.Controllers.csproj": "Template.Api/Template.Api.csproj"
+          },
+          "exclude": [
+            "Template.Api/Program.cs",
+            "Template.Api/Program.Minimal.cs",
+            "Template.Api/Program.FastEndpoints.cs",
+            "Template.Api/Template.Api.Minimal.csproj",
+            "Template.Api/Template.Api.FastEndpoints.csproj",
+            "Template.Api/Endpoints/**",
+            "Template.Api/MinimalApiEndpoints/**"
+          ]
+        },
+        {
+          "condition": "(useMinimal)",
+          "rename": {
+            "Template.Api/Program.Minimal.cs": "Template.Api/Program.cs",
+            "Template.Api/Template.Api.Minimal.csproj": "Template.Api/Template.Api.csproj"
+          },
+          "exclude": [
+            "Template.Api/Program.cs",
+            "Template.Api/Program.Controllers.cs",
+            "Template.Api/Program.FastEndpoints.cs",
+            "Template.Api/Template.Api.csproj",
+            "Template.Api/Template.Api.Controllers.csproj",
+            "Template.Api/Template.Api.FastEndpoints.csproj",
+            "Template.Api/Endpoints/**",
+            "Template.Api/Controllers/**"
+          ]
+        },
+        {
+          "condition": "(useFastEndpoints)",
+          "rename": {
+            "Template.Api/Program.FastEndpoints.cs": "Template.Api/Program.cs",
+            "Template.Api/Template.Api.FastEndpoints.csproj": "Template.Api/Template.Api.csproj"
+          },
+          "exclude": [
+            "Template.Api/Program.cs",
+            "Template.Api/Program.Controllers.cs",
+            "Template.Api/Program.Minimal.cs",
+            "Template.Api/Template.Api.csproj",
+            "Template.Api/Template.Api.Controllers.csproj",
+            "Template.Api/Template.Api.Minimal.csproj",
+            "Template.Api/MinimalApiEndpoints/**",
+            "Template.Api/Controllers/**"
+          ]
+        }
+      ]
+    }
+  ]
+}

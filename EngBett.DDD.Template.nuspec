@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>EngBett.DDD.Template</id>
+    <version>2.0.0</version>
+    <description>A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core, and optional Minimal APIs or FastEndpoints support.</description>
+    <authors>EngBett</authors>
+    <license type="expression">MIT</license>
+    <projectUrl>https://github.com/EngBett/netcore-ddd-template</projectUrl>
+    <readme>README.md</readme>
+    <tags>dotnet template ddd clean-architecture csharp mediatr efcore fastendpoints minimal-api</tags>
+    <packageTypes>
+      <packageType name="Template" />
+    </packageTypes>
+  </metadata>
+  <files>
+    <file src="**" target="content" exclude="**\bin\**;**\obj\**;**\.git\**;**\nupkg\**;**\*.user;**\*.suo" />
+  </files>
+</package>

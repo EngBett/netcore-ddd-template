@@ -27,6 +27,8 @@
         <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
+        <PackageReference Include="FastEndpoints" Version="8.1.0" />
+        <PackageReference Include="FastEndpoints.Swagger" Version="8.1.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
@@ -38,15 +40,6 @@
         <ProjectReference Include="..\Template.Domain\Template.Domain.csproj" />
         <ProjectReference Include="..\Template.Infrastructure\Template.Infrastructure.csproj" />
         <ProjectReference Include="..\Template.Common\Template.Common.csproj" />
-    </ItemGroup>
-
-    <!-- Exclude template variant files from this project's build.
-         These files are used only by dotnet new to generate different API style variants. -->
-    <ItemGroup>
-        <Compile Remove="Program.Controllers.cs" />
-        <Compile Remove="Program.Minimal.cs" />
-        <Compile Remove="Program.FastEndpoints.cs" />
-        <Compile Remove="Endpoints\**" />
     </ItemGroup>
 
 </Project>
