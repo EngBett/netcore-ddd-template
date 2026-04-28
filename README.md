@@ -1,126 +1,497 @@
 # DDD .NET Template
 
-A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core with SQL Server, Serilog, Redis caching, JWT authentication, and Prometheus metrics.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core, JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
-## Features
+## Table of Contents
 
-- **.NET 10** — targets the latest .NET runtime
-- **Domain-Driven Design** — layered Clean Architecture: `Api`, `Application`, `Domain`, `Infrastructure`, `Common`
-- **MediatR** — CQRS pattern with pipeline behaviours (validation, logging)
-- **FluentValidation** — request validation via MediatR pipeline
-- **Entity Framework Core 10** — SQL Server with migrations
-- **Serilog** — structured logging to console and Seq
-- **Redis** — distributed caching via `StackExchange.Redis`
-- **JWT Bearer Authentication** — pre-configured JWT middleware
-- **Swagger / OpenAPI** — Swashbuckle integration
-- **Prometheus** — metrics endpoint at `/metrics`
-- **Health Checks** — endpoint at `/_health`
-- **Three API styles** — MVC controllers, Minimal APIs, or FastEndpoints
+- [What Is This Template?](#what-is-this-template)
+- [Architecture Overview](#architecture-overview)
+- [Key Technologies](#key-technologies)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Template Options](#template-options)
+  - [API Styles](#api-styles)
+- [Project Structure](#project-structure)
+  - [Template.Api](#templateapi)
+  - [Template.Application](#templateapplication)
+  - [Template.Domain](#templatedomain)
+  - [Template.Infrastructure](#templateinfrastructure)
+  - [Template.Common](#templatecommon)
+- [Data Flow (Request Lifecycle)](#data-flow-request-lifecycle)
+- [Configuration](#configuration)
+- [Running Locally](#running-locally)
+- [Adding Features](#adding-features)
+- [Publishing the Template to NuGet](#publishing-the-template-to-nuget)
+
+---
+
+## What Is This Template?
+
+This template gives you a fully wired-up, opinionated starting point for building a **.NET 10 Web API** that follows:
+
+- **Domain-Driven Design (DDD)** — your business logic lives in a rich `Domain` layer with domain events, not in controllers or services.
+- **Clean Architecture** — dependencies always point inward: `Api` → `Application` → `Domain`; `Infrastructure` implements interfaces defined in `Application`.
+- **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
+- **Repository + Unit of Work** — data access is abstracted behind well-known interfaces so your application layer stays infrastructure-agnostic.
+
+Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────┐
+│              Template.Api               │  ← HTTP layer: receives requests,
+│   (Controllers / Minimal / FastEndpts)  │    returns responses
+└───────────────┬─────────────────────────┘
+                │ dispatches via MediatR
+┌───────────────▼─────────────────────────┐
+│          Template.Application           │  ← CQRS handlers, validation,
+│     Commands · Queries · Behaviors      │    pipeline behaviours
+└───────────────┬─────────────────────────┘
+                │ uses domain models & interfaces
+┌───────────────▼─────────────────────────┐
+│            Template.Domain              │  ← Entities, value objects,
+│      Entities · Events · Interfaces     │    domain events, exceptions
+└─────────────────────────────────────────┘
+                ▲ implements
+┌───────────────┴─────────────────────────┐
+│         Template.Infrastructure         │  ← EF Core, repositories,
+│   DbContext · Repositories · UoW · SQL  │    unit of work, Redis
+└─────────────────────────────────────────┘
+                ▲ uses
+┌───────────────┴─────────────────────────┐
+│           Template.Common               │  ← Shared models, extensions,
+│      Models · Extensions · Enums        │    response wrappers
+└─────────────────────────────────────────┘
+```
+
+**Dependency rule**: inner layers have no reference to outer layers. `Domain` and `Application` never reference `Infrastructure` or `Api`.
+
+---
+
+## Key Technologies
+
+| Technology | Purpose |
+|---|---|
+| **.NET 10** | Runtime and SDK |
+| **ASP.NET Core 10** | Web host, middleware pipeline |
+| **Entity Framework Core 10** | ORM with SQL Server provider and code-first migrations |
+| **MediatR 12** | In-process messaging for CQRS (commands, queries, domain events) |
+| **FluentValidation 12** | Request validation wired into the MediatR pipeline |
+| **Serilog** | Structured logging to console and Seq |
+| **Swashbuckle / OpenAPI** | Swagger UI for API exploration |
+| **JWT Bearer** | Authentication via `Microsoft.AspNetCore.Authentication.JwtBearer` |
+| **Redis** | Distributed caching via `StackExchange.Redis` |
+| **Prometheus** | Metrics scraping endpoint at `/metrics` |
+| **FastEndpoints 8** | *(optional)* Slim, high-performance endpoint model |
+| **IdentityModel** | JWT claim helpers |
+
+---
 
 ## Installation
 
-Install the template via NuGet or directly from this repository:
+Install the template globally from NuGet or directly from this repository:
 
 ```bash
 # From NuGet (once published)
 dotnet new install EngBett.DDD.Template
 
-# From local source (development)
+# From local source (for development / contribution)
 dotnet new install /path/to/this/repo
 ```
+
+Verify the template is registered:
+
+```bash
+dotnet new list ddd-template
+```
+
+---
 
 ## Usage
 
 ```bash
-# Create a project with traditional MVC controllers (default)
+# Default: MVC controllers
 dotnet new ddd-template --name MyApp
 
-# Create a project with ASP.NET Core Minimal APIs
+# Minimal APIs
 dotnet new ddd-template --name MyApp --apiStyle minimal
 
-# Create a project with FastEndpoints
+# FastEndpoints
 dotnet new ddd-template --name MyApp --apiStyle fastendpoints
+
+# Custom output directory
+dotnet new ddd-template --name MyApp --output ./src/MyApp
 ```
 
-The `--name` option sets the project name. A directory with that name is created automatically when `--output` is not specified.
+`--name` controls the **project name** (replaces every occurrence of `Template` in namespaces, file names, and solution). A folder with that name is created automatically.
 
 ### Template Options
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
-| `--apiStyle` | `controllers`, `minimal`, `fastendpoints` | `controllers` | Selects the API pattern |
+| `--apiStyle` (`-ap`) | `controllers` · `minimal` · `fastendpoints` | `controllers` | Selects the HTTP endpoint pattern |
 
-## API Styles
+### API Styles
 
-### Controllers (`--apiStyle controllers`)
+#### `controllers` — MVC Controllers (default)
 
-Traditional MVC controllers. Provides a `Controllers/V1/TestController.cs` example with full DDD integration via MediatR.
+The classic ASP.NET Core pattern. Each resource group is a controller class that inherits `BaseController`.
 
-### Minimal APIs (`--apiStyle minimal`)
+```
+MyApp.Api/
+└── Controllers/
+    ├── BaseController.cs      # Shared logic: maps ApiResponse codes to HTTP status codes
+    └── V1/
+        └── TestController.cs  # Example: GET /api/v1/test
+```
 
-ASP.NET Core Minimal APIs. Endpoints are grouped in `MinimalApiEndpoints/MinimalApiEndpointRegistration.cs` using an extension method pattern. Add new endpoint groups by registering them in `MapMinimalApiEndpoints()`.
+Add a new controller:
+```csharp
+[ApiController]
+[Route("api/v1/[controller]")]
+public class ProductsController : BaseController
+{
+    private readonly IMediator _mediator;
+    public ProductsController(IMediator mediator) => _mediator = mediator;
 
-### FastEndpoints (`--apiStyle fastendpoints`)
+    [HttpGet]
+    public async Task<IActionResult> Get([FromQuery] GetProductsQuery query)
+        => CustomResponse(await _mediator.Send(query));
+}
+```
 
-Uses the [FastEndpoints](https://fast-endpoints.com/) library. Each endpoint is a self-contained class in the `Endpoints/` folder that inherits from `EndpointWithoutRequest<TResponse>` (or `Endpoint<TRequest, TResponse>` for endpoints with a request model). FastEndpoints auto-discovers all endpoints at startup.
+#### `minimal` — Minimal APIs
+
+Endpoints are plain lambda functions registered in `MinimalApiEndpoints/MinimalApiEndpointRegistration.cs`.
+
+```
+MyApp.Api/
+└── MinimalApiEndpoints/
+    └── MinimalApiEndpointRegistration.cs  # Groups & registers all minimal endpoints
+```
+
+Add a new endpoint group:
+```csharp
+// In MinimalApiEndpointRegistration.cs
+public static WebApplication MapMinimalApiEndpoints(this WebApplication app)
+{
+    app.MapTestEndpoints();
+    app.MapProductEndpoints();  // ← add here
+    return app;
+}
+
+// New file: ProductEndpoints.cs
+private static void MapProductEndpoints(this WebApplication app)
+{
+    var group = app.MapGroup("/api/v1/products").RequireAuthorization();
+    group.MapGet("/", async (IMediator mediator) =>
+        Results.Ok(await mediator.Send(new GetProductsQuery())));
+}
+```
+
+#### `fastendpoints` — FastEndpoints
+
+Each endpoint is a self-contained class. FastEndpoints discovers them automatically at startup.
+
+```
+MyApp.Api/
+└── Endpoints/
+    └── TestEndpoint.cs   # Example: GET /api/v1/test
+```
+
+Add a new endpoint:
+```csharp
+public class GetProductsEndpoint : EndpointWithoutRequest<ApiResponse<List<ProductDto>>>
+{
+    private readonly IMediator _mediator;
+    public GetProductsEndpoint(IMediator mediator) => _mediator = mediator;
+
+    public override void Configure()
+    {
+        Get("/api/v1/products");
+        RequireAuthorization();
+    }
+
+    public override async Task HandleAsync(CancellationToken ct)
+        => await Send.OkAsync(await _mediator.Send(new GetProductsQuery()), ct);
+}
+```
+
+See the [FastEndpoints documentation](https://fast-endpoints.com/) for the full API.
+
+---
 
 ## Project Structure
 
 ```
 MyApp/
-├── MyApp.Api/                  # Entry point — startup, middleware, controllers/endpoints
-│   ├── Controllers/            # (controllers style only) MVC controllers
-│   ├── MinimalApiEndpoints/    # (minimal style only) minimal API endpoint groups
-│   ├── Endpoints/              # (fastendpoints style only) FastEndpoints endpoint classes
-│   ├── Filters/                # Exception filter
-│   ├── Services/               # CurrentUserService
-│   ├── Program.cs              # Application entry point
-│   └── StartupHelper.cs        # Service/middleware registration helpers
-├── MyApp.Application/          # CQRS commands/queries, MediatR handlers, validators
-│   ├── Behaviors/              # MediatR pipeline behaviours
-│   └── DependencyInjection.cs
-├── MyApp.Domain/               # Domain entities, value objects, domain events
-│   └── Models/BaseEntity.cs
-├── MyApp.Infrastructure/       # EF Core DbContext, repositories, unit of work
-│   └── DataAccess/
-└── MyApp.Common/               # Shared models, extensions, enumerations
+├── global.json                            # Pins .NET 10 SDK
+├── MyApp.sln                              # Solution file
+│
+├── MyApp.Api/                             # HTTP entry-point project
+│   ├── Controllers/                       # [controllers style] MVC controller classes
+│   │   ├── BaseController.cs              #   Shared HTTP-response helper
+│   │   └── V1/
+│   │       └── TestController.cs          #   Example controller
+│   ├── MinimalApiEndpoints/               # [minimal style] Minimal API registrations
+│   │   └── MinimalApiEndpointRegistration.cs
+│   ├── Endpoints/                         # [fastendpoints style] FastEndpoints classes
+│   │   └── TestEndpoint.cs
+│   ├── Filters/
+│   │   └── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses
+│   ├── Services/
+│   │   └── CurrentUserService.cs          # Reads claims from the JWT token
+│   ├── Properties/
+│   │   └── launchSettings.json
+│   ├── Program.cs                         # Application entry point
+│   ├── StartupHelper.cs                   # Extension methods: ConfigureServices / ConfigureMiddleware
+│   ├── appsettings.json                   # Configuration defaults
+│   └── Dockerfile                         # Multi-stage Docker build
+│
+├── MyApp.Application/                     # CQRS / use-case layer
+│   ├── Behaviors/
+│   │   └── ValidatorBehavior.cs           # MediatR pipeline: runs FluentValidation before handler
+│   ├── Interfaces/
+│   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
+│   │   ├── IRepository.cs                 # Generic async repository contract
+│   │   └── IUnitOfWork.cs                 # Transaction boundary contract
+│   ├── Commands/                          # (empty — add your command handlers here)
+│   ├── Queries/                           # (empty — add your query handlers here)
+│   ├── Validations/                       # (empty — add your FluentValidation validators here)
+│   ├── ViewModels/                        # (empty — outbound DTO shapes)
+│   ├── DisplayModels/                     # (empty — alternative read-model DTOs)
+│   ├── EventHandlers/                     # (empty — MediatR domain-event handlers)
+│   └── DependencyInjection.cs             # Registers MediatR + FluentValidation validators
+│
+├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
+│   ├── Models/
+│   │   └── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
+│   │                                      #   domain-event collection, equality by Id
+│   ├── Exceptions/
+│   │   └── DomainException.cs             # Throw for business-rule violations (caught by GlobalExceptionFilter)
+│   ├── Interfaces/
+│   │   └── ISpecifications.cs             # Specification pattern contract
+│   ├── DomainEvents/                      # (empty — add INotification implementations here)
+│   └── Enums/                             # (empty — add domain enumerations here)
+│
+├── MyApp.Infrastructure/                  # External-system implementations
+│   ├── DataAccess/
+│   │   ├── ApplicationContext.cs          # EF Core DbContext; includes SQL sequence helper
+│   │   ├── Extension/
+│   │   │   └── ApiContextExtension.cs     # DbContext helpers
+│   │   ├── Repository/
+│   │   │   └── Repository.cs              # Generic IRepository<T> implementation
+│   │   └── UnitOfWork/
+│   │       └── UnitOfWork.cs              # IUnitOfWork: SaveChanges + domain-event dispatch
+│   └── Extensions/
+│       ├── MediatorExtension.cs           # DispatchDomainEventsAsync — called after SaveChanges
+│       ├── QueryableExtension.cs          # IQueryable helpers
+│       ├── SqlExtension.cs                # Raw SQL mapping helpers
+│       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
+│
+└── MyApp.Common/                          # Cross-cutting concerns shared across all layers
+    ├── Models/
+    │   ├── ApiResponse.cs                 # Unified JSON envelope: { result, message, errors }
+    │   ├── AppSettings.cs                 # Strongly-typed appsettings binding
+    │   ├── LogModel.cs                    # Structured log entry shape
+    │   ├── PagedResult.cs                 # Generic pagination wrapper
+    │   └── ResponseEnums.cs               # ResponseCodes enum: Success, Fail, NotFound, …
+    └── Extensions/
+        ├── EnumUtilExtension.cs           # Enum description/display helpers
+        ├── GenericTypeExtensions.cs        # GetGenericTypeName() used by ValidatorBehavior
+        └── QueryableExtension.cs          # Pagination and ordering helpers
 ```
+
+---
+
+## Data Flow (Request Lifecycle)
+
+Here is how an HTTP request travels through the layers:
+
+```
+HTTP Request
+    │
+    ▼
+[Template.Api] Controller / Minimal endpoint / FastEndpoints endpoint
+    │  Injects IMediator, sends a Command or Query
+    ▼
+[Template.Application] MediatR Pipeline
+    │  1. ValidatorBehavior — runs FluentValidation; throws ValidationException on failure
+    │  2. YourCommandHandler / YourQueryHandler — executes the use case
+    │     ├── Calls IUnitOfWork.Repository<T>() to read/write domain entities
+    │     └── Calls IUnitOfWork.SaveChangesAsync() to commit
+    ▼
+[Template.Infrastructure] UnitOfWork.SaveChangesAsync()
+    │  1. EF Core persists changes to SQL Server
+    │  2. MediatorExtension.DispatchDomainEventsAsync() publishes any domain events
+    ▼
+[Template.Application] Domain event handlers (INotificationHandler<TEvent>)
+    │
+    ▼
+[Template.Api] Handler returns result → ApiResponse<T> → HTTP response
+```
+
+**Error handling**: unhandled exceptions bubble up to `GlobalExceptionFilter`, which maps:
+- `DomainException` → `400 Bad Request`
+- EF Core unique-constraint violation → `400 Bad Request` with a human-readable message
+- Any other exception → `500 Internal Server Error` (with full detail in Development)
+
+---
 
 ## Configuration
 
-Copy `appsettings.json` and fill in your values:
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file.
 
 ```json
 {
   "DATABASE_CON": "Server=localhost,1433;Database=MyApp;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
+  "Redis": "localhost:6379",
   "AppSettings": {
-    "Authority": "",
-    "Audience": "/resources",
-    "ShowSwagger": true,
-    "EnableAutoMigration": true
+    "Authority":           "",        // OIDC / identity server URL for JWT validation
+    "Audience":            "/resources",
+    "ShowSwagger":         true,      // Set false in production
+    "EnableAutoMigration": true,      // Runs EF Core migrations on startup
+    "UseLoggerMiddleWare": true,
+    "RequireHttpsMetadata": true,
+    "SensitiveDataKeys":   "password,token,secret,..."   // Keys to redact in logs
   },
-  "Redis": "localhost:6379"
+  "Logging": {
+    "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning" }
+  }
 }
 ```
 
+| Key | Description |
+|-----|-------------|
+| `DATABASE_CON` | SQL Server connection string |
+| `Redis` | Redis connection string (`host:port`) |
+| `AppSettings.Authority` | JWT authority (your identity provider URL) |
+| `AppSettings.Audience` | JWT audience |
+| `AppSettings.ShowSwagger` | Toggle Swagger UI |
+| `AppSettings.EnableAutoMigration` | Run `Database.Migrate()` on startup |
+
+---
+
 ## Running Locally
 
-1. Start SQL Server and Redis (Docker Compose example):
+**Prerequisites**: .NET 10 SDK, Docker (for SQL Server and Redis).
+
+1. **Start infrastructure:**
    ```bash
-   docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Password@123" -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+   # SQL Server
+   docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Password@123" \
+              -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+
+   # Redis
    docker run -p 6379:6379 -d redis
+
+   # Seq (optional — structured log viewer)
+   docker run -p 5341:5341 -p 80:80 -d datalust/seq
    ```
 
-2. Run the API:
+2. **Update `appsettings.json`** with the connection string and Redis address.
+
+3. **Run the API:**
    ```bash
    dotnet run --project MyApp.Api
    ```
 
-3. Open Swagger UI at `https://localhost:7254/swagger`
+4. **Browse:**
+   - Swagger UI → `https://localhost:7254/swagger`
+   - Health check → `https://localhost:7254/_health`
+   - Metrics → `https://localhost:7254/metrics`
+
+---
+
+## Adding Features
+
+### 1 — Define a domain entity
+
+```csharp
+// MyApp.Domain/Models/Product.cs
+public class Product : BaseEntity
+{
+    public string Name { get; private set; }
+    public decimal Price { get; private set; }
+
+    public static Product Create(string name, decimal price)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("Product name is required.");
+        return new Product { Name = name, Price = price };
+    }
+}
+```
+
+### 2 — Add a command + handler
+
+```csharp
+// MyApp.Application/Commands/CreateProductCommand.cs
+public record CreateProductCommand(string Name, decimal Price) : IRequest<ApiResponse<string>>;
+
+public class CreateProductHandler : IRequestHandler<CreateProductCommand, ApiResponse<string>>
+{
+    private readonly IUnitOfWork _uow;
+    public CreateProductHandler(IUnitOfWork uow) => _uow = uow;
+
+    public async Task<ApiResponse<string>> Handle(CreateProductCommand cmd, CancellationToken ct)
+    {
+        var product = Product.Create(cmd.Name, cmd.Price);
+        await _uow.Repository<Product>().AddAsync(product);
+        await _uow.SaveChangesAsync(ct);
+        return ResponseMessage.Success(product.Id);
+    }
+}
+```
+
+### 3 — Add a validator
+
+```csharp
+// MyApp.Application/Validations/CreateProductValidator.cs
+public class CreateProductValidator : AbstractValidator<CreateProductCommand>
+{
+    public CreateProductValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Price).GreaterThan(0);
+    }
+}
+```
+
+### 4 — Register the entity with EF Core
+
+```csharp
+// MyApp.Infrastructure/DataAccess/ApplicationContext.cs
+public DbSet<Product> Products => Set<Product>();
+```
+
+### 5 — Expose via endpoint
+
+```csharp
+// Controllers style
+[HttpPost]
+public async Task<IActionResult> Create([FromBody] CreateProductCommand cmd)
+    => CustomResponse(await _mediator.Send(cmd));
+```
+
+---
 
 ## Publishing the Template to NuGet
 
+A `EngBett.DDD.Template.nuspec` is provided. Pack and push:
+
 ```bash
-dotnet pack -o ./nupkg
-dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key YOUR_API_KEY
+nuget pack EngBett.DDD.Template.nuspec -OutputDirectory ./nupkg
+dotnet nuget push ./nupkg/*.nupkg \
+    --source https://api.nuget.org/v3/index.json \
+    --api-key YOUR_API_KEY
 ```
+
+Once published, anyone can install it with:
+```bash
+dotnet new install EngBett.DDD.Template
+```
+
