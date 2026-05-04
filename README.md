@@ -1,6 +1,6 @@
 # DDD .NET Template
 
-A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core, JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
 ## Table of Contents
 
@@ -10,6 +10,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
 - [Installation](#installation)
 - [Usage](#usage)
   - [Template Options](#template-options)
+  - [Database providers](#database-providers)
   - [API Styles](#api-styles)
 - [Project Structure](#project-structure)
   - [Template.Api](#templateapi)
@@ -33,6 +34,7 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **Clean Architecture** — dependencies always point inward: `Api` → `Application` → `Domain`; `Infrastructure` implements interfaces defined in `Application`.
 - **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
 - **`IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
+- **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -77,7 +79,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 |---|---|
 | **.NET 10** | Runtime and SDK |
 | **ASP.NET Core 10** | Web host, middleware pipeline |
-| **Entity Framework Core 10** | ORM with SQL Server provider and code-first migrations |
+| **Entity Framework Core 10** | ORM (SQL Server, PostgreSQL, SQLite, or MySQL) and code-first migrations |
 | **MediatR 12** | In-process messaging for CQRS (commands, queries, domain events) |
 | **FluentValidation 12** | Request validation wired into the MediatR pipeline |
 | **Serilog** | Structured logging to console and Seq |
@@ -108,19 +110,46 @@ Verify the template is registered:
 dotnet new list ddd-template
 ```
 
+### After installation
+
+The template is available as `ddd-template` (see `shortName` in `.template.config/template.json`). You can pass [database flags](#database-providers) and [API style](#template-options) together, for example:
+
+```bash
+dotnet new ddd-template --name MyApp --postgres --apiStyle minimal
+```
+
 ---
 
 ## Usage
 
 ```bash
-# Default: MVC controllers
+# Default: MVC controllers + SQL Server sample appsettings
 dotnet new ddd-template --name MyApp
+
+# PostgreSQL (shortcut flag or explicit database choice)
+dotnet new ddd-template --name MyApp --postgres
+dotnet new ddd-template --name MyApp --database postgres
+
+# SQLite
+dotnet new ddd-template --name MyApp --sqlite
+
+# MySQL
+dotnet new ddd-template --name MyApp --mysql
+
+# SQL Server (explicit; same as default when no DB flags are passed)
+dotnet new ddd-template --name MyApp --mssql
 
 # Minimal APIs
 dotnet new ddd-template --name MyApp --apiStyle minimal
 
 # FastEndpoints
 dotnet new ddd-template --name MyApp --apiStyle fastendpoints
+
+# Combine database + API style
+dotnet new ddd-template --name MyApp --database sqlite --apiStyle fastendpoints
+
+# Short form for database choice
+dotnet new ddd-template --name MyApp -db postgres
 
 # Custom output directory
 dotnet new ddd-template --name MyApp --output ./src/MyApp
@@ -133,6 +162,26 @@ dotnet new ddd-template --name MyApp --output ./src/MyApp
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
 | `--apiStyle` (`-ap`) | `controllers` · `minimal` · `fastendpoints` | `controllers` | Selects the HTTP endpoint pattern |
+| `--database` (`-db`) | `mssql` · `postgres` · `sqlite` · `mysql` | `mssql` | Selects the EF Core relational provider and sample connection settings |
+| `--postgres` | boolean | `false` | Shortcut for `--database postgres` |
+| `--mysql` | boolean | `false` | Shortcut for `--database mysql` |
+| `--sqlite` | boolean | `false` | Shortcut for `--database sqlite` |
+| `--mssql` | boolean | `false` | Shortcut for `--database mssql` (explicit SQL Server) |
+
+If several `--postgres` / `--mysql` / `--sqlite` flags are passed together, resolution order is: **postgres**, then **mysql**, then **sqlite**. Otherwise the `--database` choice applies (default **mssql** when no flags are set).
+
+### Database providers
+
+The generated **Api** project references every EF Core provider package; at runtime the active provider is selected from **`DatabaseKind`** in `appsettings.json` (`mssql`, `postgres`, `sqlite`, or `mysql`). The template ships alternate sample files (`appsettings.Database.*.json`) and renames the selected one to `appsettings.json` when you run `dotnet new`, so you get a matching **`DATABASE_CON`** for local development.
+
+| Provider | `DatabaseKind` | Notes |
+|----------|----------------|--------|
+| Microsoft SQL Server | `mssql` | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer` |
+| PostgreSQL | `postgres` | `UseNpgsql`, Npgsql provider |
+| SQLite | `sqlite` | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON` |
+| MySQL | `mysql` | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `StartupHelper` if you use another server version |
+
+**Updating an existing project:** set `DatabaseKind` and `DATABASE_CON` in configuration to switch providers; no need to re-run the template.
 
 ### API Styles
 
@@ -246,9 +295,12 @@ MyApp/
 │   │   └── CurrentUserService.cs          # Reads claims from the JWT token
 │   ├── Properties/
 │   │   └── launchSettings.json
+│   ├── appsettings.json                   # Active config (`DatabaseKind`, `DATABASE_CON`, …); chosen at template creation
+│   ├── appsettings.Database.postgres.json # Template-only: copied/renamed when using `--database postgres` / `--postgres`
+│   ├── appsettings.Database.sqlite.json   # Template-only: SQLite sample
+│   ├── appsettings.Database.mysql.json    # Template-only: MySQL sample
 │   ├── Program.cs                         # Application entry point
 │   ├── StartupHelper.cs                   # Extension methods: ConfigureServices / ConfigureMiddleware
-│   ├── appsettings.json                   # Configuration defaults
 │   └── Dockerfile                         # Multi-stage Docker build
 │
 ├── MyApp.Application/                     # CQRS / use-case layer
@@ -333,7 +385,7 @@ HTTP Request
 
 **Error handling**: unhandled exceptions bubble up to `GlobalExceptionFilter`, which maps:
 - `DomainException` → `400 Bad Request`
-- EF Core unique-constraint violation → `400 Bad Request` with a human-readable message
+- EF Core **unique-constraint** violations (SQL Server, PostgreSQL, SQLite, MySQL) → `400 Bad Request` with a human-readable or provider message
 - Any other exception → `500 Internal Server Error` (with full detail in Development)
 
 ---
@@ -344,16 +396,15 @@ All settings live in `appsettings.json`. Override them with environment variable
 
 ```json
 {
+  "DatabaseKind": "mssql",
   "DATABASE_CON": "Server=localhost,1433;Database=MyApp;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
   "Redis": "localhost:6379",
-  "AppSettings": {
-    "Authority":           "",        // OIDC / identity server URL for JWT validation
-    "Audience":            "/resources",
-    "ShowSwagger":         true,      // Set false in production
-    "EnableAutoMigration": true,      // Runs EF Core migrations on startup
-    "UseLoggerMiddleWare": true,
+  "ApplicationOptions": {
+    "Authority": "",
+    "Audience": "/resources",
+    "EnableAutoMigration": true,
     "RequireHttpsMetadata": true,
-    "SensitiveDataKeys":   "password,token,secret,..."   // Keys to redact in logs
+    "SensitiveDataKeys": "password,token,secret,..."
   },
   "Logging": {
     "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning" }
@@ -363,40 +414,57 @@ All settings live in `appsettings.json`. Override them with environment variable
 
 | Key | Description |
 |-----|-------------|
-| `DATABASE_CON` | SQL Server connection string |
+| `DatabaseKind` | Active EF Core provider: `mssql`, `postgres`, `sqlite`, or `mysql` (must match packages and connection string format) |
+| `DATABASE_CON` | Database connection string for the selected provider |
 | `Redis` | Redis connection string (`host:port`) |
-| `AppSettings.Authority` | JWT authority (your identity provider URL) |
-| `AppSettings.Audience` | JWT audience |
-| `AppSettings.ShowSwagger` | Toggle Swagger UI |
-| `AppSettings.EnableAutoMigration` | Run `Database.Migrate()` on startup |
+| `ApplicationOptions.Authority` | JWT authority (your identity provider URL) |
+| `ApplicationOptions.Audience` | JWT audience |
+| `ApplicationOptions.EnableAutoMigration` | When true, `Program` applies EF Core migrations on startup |
 
 ---
 
 ## Running Locally
 
-**Prerequisites**: .NET 10 SDK, Docker (for SQL Server and Redis).
+**Prerequisites**: .NET 10 SDK, Docker (optional; Redis is optional if you change caching later).
 
-1. **Start infrastructure:**
+1. **Install the template** (see [Installation](#installation)), then create a project with the database you need, for example:
    ```bash
-   # SQL Server
+   dotnet new install /path/to/this/repo
+   dotnet new ddd-template --name MyApp --postgres --output ./src/MyApp
+   ```
+
+2. **Start infrastructure** that matches `DatabaseKind` in `appsettings.json`:
+
+   ```bash
+   # SQL Server (DatabaseKind: mssql)
    docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Password@123" \
               -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
 
-   # Redis
+   # PostgreSQL (DatabaseKind: postgres)
+   docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=MyApp.Api \
+              -p 5432:5432 -d postgres:16
+
+   # MySQL (DatabaseKind: mysql)
+   docker run -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=MyApp.Api \
+              -p 3306:3306 -d mysql:8
+
+   # SQLite needs no server — ensure `DATABASE_CON` path is writable (e.g. create `./data`).
+
+   # Redis (optional template default)
    docker run -p 6379:6379 -d redis
 
    # Seq (optional — structured log viewer)
    docker run -p 5341:5341 -p 80:80 -d datalust/seq
    ```
 
-2. **Update `appsettings.json`** with the connection string and Redis address.
+3. **Update `appsettings.json`** so `DATABASE_CON` (and `Redis` if needed) match your environment.
 
-3. **Run the API:**
+4. **Run the API:**
    ```bash
    dotnet run --project MyApp.Api
    ```
 
-4. **Browse:**
+5. **Browse:**
    - Swagger UI → `https://localhost:7254/swagger`
    - Health check → `https://localhost:7254/_health`
    - Metrics → `https://localhost:7254/metrics`

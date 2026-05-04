@@ -1,10 +1,10 @@
 using System.ComponentModel;
+using System.Data;
 using System.Reflection;
 using MediatR;
 using Template.Application.Interfaces;
 using Template.Domain.Models;
 using Template.Infrastructure.Extensions;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Template.Infrastructure.DataAccess;
@@ -33,16 +33,31 @@ public class ApplicationContext : DbContext, IApplicationContext
 
     public async Task<int> GetNextSequence(DatabaseSequence sequence)
     {
-        SqlParameter result = new SqlParameter("@result", System.Data.SqlDbType.Int)
-        {
-            Direction = System.Data.ParameterDirection.Output
-        };
         var sequenceIdentifier = sequence.GetType()
             .GetMember(sequence.ToString())
             .First()
             .GetCustomAttribute<DescriptionAttribute>()
             ?.Description;
-        await Database.ExecuteSqlRawAsync($"SELECT @result = (NEXT VALUE FOR [{sequenceIdentifier}])", result);
-        return (int)result.Value;
+        if (string.IsNullOrEmpty(sequenceIdentifier))
+            throw new InvalidOperationException(
+                $"DatabaseSequence.{sequence} must use [{nameof(DescriptionAttribute)}] with the database sequence name.");
+
+        var connection = Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+            await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = Database.ProviderName switch
+        {
+            "Microsoft.EntityFrameworkCore.SqlServer" => $"SELECT NEXT VALUE FOR [{sequenceIdentifier}]",
+            "Npgsql.EntityFrameworkCore.PostgreSQL" => $"SELECT nextval('{sequenceIdentifier}')",
+            "Pomelo.EntityFrameworkCore.MySql" => $"SELECT NEXT VALUE FOR `{sequenceIdentifier}`",
+            "Microsoft.EntityFrameworkCore.Sqlite" => throw new NotSupportedException(
+                "SQLite has no built-in server sequences compatible with this helper; use INTEGER PRIMARY KEY or custom SQL."),
+            _ => throw new NotSupportedException($"GetNextSequence is not mapped for provider {Database.ProviderName}.")
+        };
+
+        var scalar = await command.ExecuteScalarAsync();
+        return Convert.ToInt32(scalar);
     }
 }

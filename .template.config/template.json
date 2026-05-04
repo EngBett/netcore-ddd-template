@@ -10,7 +10,7 @@
   "identity": "EngBett.DDD.Template",
   "name": "DDD .NET Template",
   "shortName": "ddd-template",
-  "description": "A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core, and optional Minimal APIs or FastEndpoints support.",
+  "description": "A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), and optional Minimal APIs or FastEndpoints support.",
   "tags": {
     "language": "C#",
     "type": "solution"
@@ -49,6 +49,83 @@
     "useFastEndpoints": {
       "type": "computed",
       "value": "(apiStyle == \"fastendpoints\")"
+    },
+    "database": {
+      "type": "parameter",
+      "datatype": "choice",
+      "shortName": "db",
+      "description": "Default relational database provider (EF Core). Can also be set with --postgres, --mysql, --sqlite, or --mssql flags.",
+      "choices": [
+        {
+          "choice": "mssql",
+          "description": "Microsoft SQL Server"
+        },
+        {
+          "choice": "postgres",
+          "description": "PostgreSQL (Npgsql)"
+        },
+        {
+          "choice": "sqlite",
+          "description": "SQLite"
+        },
+        {
+          "choice": "mysql",
+          "description": "MySQL (Pomelo)"
+        }
+      ],
+      "defaultValue": "mssql"
+    },
+    "postgres": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Use PostgreSQL (shortcut for --database postgres)."
+    },
+    "mysql": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Use MySQL (shortcut for --database mysql)."
+    },
+    "sqlite": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Use SQLite (shortcut for --database sqlite)."
+    },
+    "mssql": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Use SQL Server (shortcut for --database mssql)."
+    },
+    "resolvedPostgres": {
+      "type": "computed",
+      "value": "(postgres || database == \"postgres\")"
+    },
+    "resolvedMysql": {
+      "type": "computed",
+      "value": "(mysql || database == \"mysql\")"
+    },
+    "resolvedSqlite": {
+      "type": "computed",
+      "value": "(sqlite || database == \"sqlite\")"
+    },
+    "usePostgres": {
+      "type": "computed",
+      "value": "resolvedPostgres"
+    },
+    "useMysql": {
+      "type": "computed",
+      "value": "(resolvedMysql && !resolvedPostgres)"
+    },
+    "useSqlite": {
+      "type": "computed",
+      "value": "(resolvedSqlite && !resolvedPostgres && !resolvedMysql)"
+    },
+    "useMssql": {
+      "type": "computed",
+      "value": "(!resolvedPostgres && !resolvedMysql && !resolvedSqlite && (mssql || database == \"mssql\"))"
     }
   },
   "sources": [
@@ -102,6 +179,47 @@
             "Template.Api/Template.Api.Minimal.csproj",
             "Template.Api/MinimalApiEndpoints/**",
             "Template.Api/Controllers/**"
+          ]
+        },
+        {
+          "condition": "(useMssql)",
+          "exclude": [
+            "Template.Api/appsettings.Database.postgres.json",
+            "Template.Api/appsettings.Database.sqlite.json",
+            "Template.Api/appsettings.Database.mysql.json"
+          ]
+        },
+        {
+          "condition": "(usePostgres)",
+          "rename": {
+            "Template.Api/appsettings.Database.postgres.json": "Template.Api/appsettings.json"
+          },
+          "exclude": [
+            "Template.Api/appsettings.json",
+            "Template.Api/appsettings.Database.sqlite.json",
+            "Template.Api/appsettings.Database.mysql.json"
+          ]
+        },
+        {
+          "condition": "(useSqlite)",
+          "rename": {
+            "Template.Api/appsettings.Database.sqlite.json": "Template.Api/appsettings.json"
+          },
+          "exclude": [
+            "Template.Api/appsettings.json",
+            "Template.Api/appsettings.Database.postgres.json",
+            "Template.Api/appsettings.Database.mysql.json"
+          ]
+        },
+        {
+          "condition": "(useMysql)",
+          "rename": {
+            "Template.Api/appsettings.Database.mysql.json": "Template.Api/appsettings.json"
+          },
+          "exclude": [
+            "Template.Api/appsettings.json",
+            "Template.Api/appsettings.Database.postgres.json",
+            "Template.Api/appsettings.Database.sqlite.json"
           ]
         }
       ]

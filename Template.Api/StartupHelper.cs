@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Pomelo.EntityFrameworkCore.Infrastructure;
 using Prometheus;
 using StackExchange.Redis;
 using Template.Common.Models;
@@ -96,9 +97,30 @@ public static class StartupHelper
 
     public static void AddDbContext(this IServiceCollection services, IConfiguration configuration)
     {
+        var connectionString = configuration["DATABASE_CON"]
+            ?? throw new InvalidOperationException("DATABASE_CON must be set in configuration.");
+        var databaseKind = configuration["DatabaseKind"] ?? "mssql";
+
         services.AddDbContext<ApplicationContext>((_, options) =>
         {
-            options.UseSqlServer(configuration["DATABASE_CON"]);
+            switch (databaseKind.ToLowerInvariant())
+            {
+                case "mssql":
+                    options.UseSqlServer(connectionString);
+                    break;
+                case "postgres":
+                    options.UseNpgsql(connectionString);
+                    break;
+                case "sqlite":
+                    options.UseSqlite(connectionString);
+                    break;
+                case "mysql":
+                    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36)));
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unknown DatabaseKind '{databaseKind}'. Use mssql, postgres, sqlite, or mysql.");
+            }
         });
         services.AddScoped<IApplicationContext>(sp => sp.GetRequiredService<ApplicationContext>());
     }
