@@ -8,7 +8,7 @@ namespace Template.Common.Models
         [JsonPropertyName("result")]
         public T Result { get; set; }
         [JsonPropertyName("message")]
-        public string Message { get; set; }
+        public string? Message { get; set; }
 
         [JsonIgnore]
         public ResponseEnums.ResponseCodes Code { get; set; }

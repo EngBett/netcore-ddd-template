@@ -44,6 +44,13 @@ namespace Template.Application
             {
                 x.AddConsumer<TodoMessageConsumer>();
 
+                x.AddConfigureEndpointsCallback((regContext, _, endpointCfg) =>
+                {
+                    var mt = regContext.GetRequiredService<IOptions<MassTransitOptions>>().Value;
+                    if (mt.EnableInMemoryOutbox)
+                        endpointCfg.UseInMemoryOutbox(regContext);
+                });
+
                 x.UsingRabbitMq((context, cfg) =>
                 {
                     var rmq = context.GetRequiredService<IOptions<RabbitMQOptions>>().Value;
@@ -54,9 +61,6 @@ namespace Template.Application
                         h.Username(rmq.UserName);
                         h.Password(rmq.Password);
                     });
-
-                    if (mt.EnableInMemoryOutbox)
-                        cfg.UseInMemoryOutbox();
 
                     ApplyMassTransitResilience(cfg, mt);
 
