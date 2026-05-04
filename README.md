@@ -1,6 +1,6 @@
 # DDD .NET Template
 
-A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), **MassTransit** with **RabbitMQ** (example consumer), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
 ## Table of Contents
 
@@ -20,6 +20,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
   - [Template.Common](#templatecommon)
 - [Data Flow (Request Lifecycle)](#data-flow-request-lifecycle)
 - [Configuration](#configuration)
+- [Messaging (MassTransit + RabbitMQ)](#messaging-masstransit--rabbitmq)
 - [Running Locally](#running-locally)
 - [Adding Features](#adding-features)
 - [Publishing the Template to NuGet](#publishing-the-template-to-nuget)
@@ -35,6 +36,7 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
 - **`IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
+- **Messaging** — **MassTransit** is configured in `Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (queues/exchanges are created by MassTransit’s **topologies** when the bus starts).
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -89,6 +91,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 | **Prometheus** | Metrics scraping endpoint at `/metrics` |
 | **FastEndpoints 8** | *(optional)* Slim, high-performance endpoint model |
 | **IdentityModel** | JWT claim helpers |
+| **MassTransit 8** | Asynchronous messaging; **RabbitMQ** transport with configurable consumers |
 
 ---
 
@@ -179,7 +182,7 @@ The generated **Api** project references every EF Core provider package; at runt
 | Microsoft SQL Server | `mssql` | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer` |
 | PostgreSQL | `postgres` | `UseNpgsql`, Npgsql provider |
 | SQLite | `sqlite` | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON` |
-| MySQL | `mysql` | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `StartupHelper` if you use another server version |
+| MySQL | `mysql` | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `Template.Infrastructure/DependencyInjection.cs` if you use another server version |
 
 **Updating an existing project:** set `DatabaseKind` and `DATABASE_CON` in configuration to switch providers; no need to re-run the template.
 
@@ -299,8 +302,8 @@ MyApp/
 │   ├── appsettings.Database.postgres.json # Template-only: copied/renamed when using `--database postgres` / `--postgres`
 │   ├── appsettings.Database.sqlite.json   # Template-only: SQLite sample
 │   ├── appsettings.Database.mysql.json    # Template-only: MySQL sample
-│   ├── Program.cs                         # Application entry point
-│   ├── StartupHelper.cs                   # Extension methods: ConfigureServices / ConfigureMiddleware
+│   ├── Program.cs                         # Host bootstrap; calls Api / Application / Infrastructure DI extensions
+│   ├── DependencyInjection.cs             # HTTP pipeline: controllers, Swagger, CORS, JWT wiring (calls Infrastructure for auth)
 │   └── Dockerfile                         # Multi-stage Docker build
 │
 ├── MyApp.Application/                     # CQRS / use-case layer
@@ -316,7 +319,8 @@ MyApp/
 │   ├── Interfaces/
 │   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
 │   │   └── IApplicationContext.cs         # Abstraction over EF Core (implemented by `ApplicationContext`)
-│   └── DependencyInjection.cs             # Registers MediatR + FluentValidation validators
+│   ├── Consumers/                         # MassTransit `IConsumer<T>` handlers (e.g. RabbitMQ)
+│   └── DependencyInjection.cs             # MediatR, FluentValidation, MassTransit + RabbitMQ (consumers)
 │
 ├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
 │   ├── Models/
@@ -330,6 +334,7 @@ MyApp/
 │   └── DomainEvents/                      # INotification domain events (e.g. Todos/TodoCreatedEvent)
 │
 ├── MyApp.Infrastructure/                  # External-system implementations
+│   ├── DependencyInjection.cs             # EF Core, Redis cache, JWT authentication
 │   ├── DataAccess/
 │   │   ├── ApplicationContext.cs          # EF Core DbContext; implements IApplicationContext;
 │   │   │                                  #   overrides SaveChangesAsync to dispatch domain events
@@ -343,7 +348,11 @@ MyApp/
 │
 └── MyApp.Common/                          # Cross-cutting concerns shared across all layers
     ├── Options/
-    │   └── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
+    │   ├── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
+    │   ├── RedisOptions.cs                 # `RedisOptions`: connection string + cache key prefix
+    │   ├── RabbitMQOptions.cs              # `RabbitMQOptions`: MassTransit RabbitMQ host/user/vhost
+    │   └── MassTransitOptions.cs           # `MassTransitOptions`: retries, redelivery, in-memory outbox
+    ├── Messages/                          # Contracts published/consumed via MassTransit (e.g. Todos/TodoMessage)
     ├── Models/
     │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
     │   ├── LogModel.cs                    # Structured log entry shape
@@ -393,13 +402,29 @@ HTTP Request
 
 ## Configuration
 
-All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under the **`ApplicationOptions`** section, which binds to `Template.Common/Options/ApplicationOptions.cs` (see `StartupHelper` and `Program`).
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under **`ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses **`RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in **`Template.Infrastructure/DependencyInjection.cs`**. **MassTransit** reads **`RabbitMQOptions`**, **`MassTransitOptions`** (retries, delayed redelivery, in-memory outbox), and registers consumers in **`Template.Application/DependencyInjection.cs`**. The HTTP pipeline lives in **`Template.Api/DependencyInjection.cs`**—see `Program.cs`.
 
 ```json
 {
   "DatabaseKind": "mssql",
   "DATABASE_CON": "Server=localhost,1433;Database=MyApp;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
-  "Redis": "localhost:6379",
+  "RedisOptions": {
+    "ConnectionString": "localhost:6379",
+    "InstanceName": "MyApp.Api"
+  },
+  "MassTransitOptions": {
+    "EnableInMemoryOutbox": true,
+    "RetryIntervalsMilliseconds": [ 100, 500, 1000 ],
+    "EnableDelayedRedelivery": true,
+    "RedeliveryIntervalsSeconds": [ 1, 5, 15 ]
+  },
+  "RabbitMQOptions": {
+    "HostName": "localhost",
+    "Port": 5672,
+    "UserName": "guest",
+    "Password": "guest",
+    "VirtualHost": "/"
+  },
   "ApplicationOptions": {
     "LogUrl": "http://localhost:5341",
     "Authority": "",
@@ -425,7 +450,16 @@ All settings live in `appsettings.json`. Override them with environment variable
 |-----|-------------|
 | `DatabaseKind` | Active EF Core provider: `mssql`, `postgres`, `sqlite`, or `mysql` (must match packages and connection string format) |
 | `DATABASE_CON` | Database connection string for the selected provider |
-| `Redis` | Redis connection string (`host:port`) |
+| `RedisOptions.ConnectionString` | StackExchange.Redis connection (e.g. `host:port` or full connection string) |
+| `RedisOptions.InstanceName` | Prefix for cache keys when using `IDistributedCache` |
+| `MassTransitOptions.EnableInMemoryOutbox` | When true, MassTransit uses the in-memory outbox for send/publish with consumer retries |
+| `MassTransitOptions.RetryIntervalsMilliseconds` | Immediate consumer retry delays (ms); omit or use `[]` to skip `UseMessageRetry` |
+| `MassTransitOptions.EnableDelayedRedelivery` | When true, schedules extra delayed redelivery after retries (RabbitMQ transport) |
+| `MassTransitOptions.RedeliveryIntervalsSeconds` | Delayed redelivery schedule (seconds) when enabled |
+| `RabbitMQOptions.HostName` | RabbitMQ server hostname (MassTransit) |
+| `RabbitMQOptions.Port` | AMQP port (default **5672**) |
+| `RabbitMQOptions.UserName` / `Password` | Broker credentials |
+| `RabbitMQOptions.VirtualHost` | Virtual host (e.g. **`/`** for the default vhost) |
 | `ApplicationOptions.LogUrl` | Seq or other structured log sink URL (used when configuring Serilog) |
 | `ApplicationOptions.Authority` | JWT authority (your identity provider URL) |
 | `ApplicationOptions.Audience` | JWT audience |
@@ -434,7 +468,15 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `ApplicationOptions.EnableAutoMigration` | When true, `Program` applies EF Core migrations on startup |
 | `ApplicationOptions.UseLoggerMiddleWare` | Feature flag for request logging middleware (if wired) |
 | `ApplicationOptions.RequireHttpsMetadata` | Passed to JWT bearer metadata retrieval when configured |
-| `ApplicationOptions.ShowSwagger` | When true, Swagger UI is registered in the HTTP pipeline (`StartupHelper`) |
+| `ApplicationOptions.ShowSwagger` | When true, Swagger UI is registered in the HTTP pipeline (`Template.Api/DependencyInjection.ConfigureMiddleware`) |
+
+## Messaging (MassTransit + RabbitMQ)
+
+- **Configuration** is bound from **`RabbitMQOptions`**, **`MassTransitOptions`**, and (for cache) **`RedisOptions`** in `Template.Common` (see `appsettings.json`).
+- **Registration** lives in **`Template.Application/DependencyInjection.cs`**: `AddMassTransit` uses the **RabbitMQ** transport, optional **`AddInMemoryOutbox()`** (from `MassTransitOptions.EnableInMemoryOutbox`), `AddConsumer<T>()` registers consumers, **`UseMessageRetry`** / **`UseDelayedRedelivery`** apply resilience from `MassTransitOptions`, and **`ConfigureEndpoints`** creates receive endpoints (queue names follow MassTransit’s default **kebab-case** endpoint naming, e.g. for `TodoMessageConsumer`).
+- **Example consumer**: `Template.Application/Consumers/TodoMessageConsumer.cs` implements `IConsumer<TodoMessage>`; the message type is `Template.Common/Messages/Todos/TodoMessage.cs`.
+- **Publishing** from the API or application layer: inject **`IPublishEndpoint`** or **`ISendEndpointProvider`** (or the MassTransit **`IBus`**) and publish/send `TodoMessage` (or your own contract types) so the consumer can process them—add any new message types and consumers in the same way.
+- The API host starts the **MassTransit bus** as a hosted service when the process starts; ensure RabbitMQ is reachable or startup will fail.
 
 ---
 
@@ -468,11 +510,14 @@ All settings live in `appsettings.json`. Override them with environment variable
    # Redis (optional template default)
    docker run -p 6379:6379 -d redis
 
+   # RabbitMQ (MassTransit — matches default RabbitMQOptions)
+   docker run -p 5672:5672 -p 15672:15672 -d rabbitmq:3-management
+
    # Seq (optional — structured log viewer)
    docker run -p 5341:5341 -p 80:80 -d datalust/seq
    ```
 
-3. **Update `appsettings.json`** so `DATABASE_CON` (and `Redis` if needed) match your environment.
+3. **Update `appsettings.json`** so `DATABASE_CON`, **`RedisOptions`**, **`RabbitMQOptions`**, and **`MassTransitOptions`** match your environment.
 
 4. **Run the API:**
    ```bash

@@ -41,7 +41,7 @@ namespace Template.Api.Filters
 
                 context.Result = new BadRequestObjectResult(apiResponse);
             }
-            else if (context.Exception is DbUpdateException dbUpdateEx && TryMapUniqueViolation(dbUpdateEx, out var uniqueMessage))
+            else if (context.Exception is DbUpdateException dbUpdateException && TryMapUniqueViolation(dbUpdateException, out var uniqueMessage))
             {
                 apiResponse.Message = uniqueMessage ?? "A unique constraint was violated.";
                 context.HttpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
