@@ -20,7 +20,7 @@ public static class StartupHelper
     private static IConnectionMultiplexer? _connectionMultiplexer = null;
     public static void ConfigureServices(this IServiceCollection services, IConfiguration config)
     {
-        _connectionMultiplexer = ConnectionMultiplexer.Connect(config.GetValue<string>("Redis"));
+        _connectionMultiplexer = ConnectionMultiplexer.Connect(config.GetValue<string>("Redis")!);
         
         services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
 
@@ -79,7 +79,7 @@ public static class StartupHelper
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                options.Authority = appSettings.Authority;
+                options.Authority = appSettings!.Authority;
                 // options.RequireHttpsMetadata = true;
                 // name of the API resource
                 options.Audience = appSettings.Audience;
