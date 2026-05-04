@@ -1,5 +1,6 @@
 using MediatR;
 using Template.Application.Features.Todos.Models;
+using Template.Application.Interfaces;
 
 namespace Template.Application.Features.Todos.Commands;
 
@@ -11,13 +12,16 @@ public class CreateTodoCommand : IRequest<TodoDto>
 
 public class CreateTodoCommandHandler : IRequestHandler<CreateTodoCommand, TodoDto>
 {
-    public CreateTodoCommandHandler()
+    private readonly IApplicationContext _db;
+
+    public CreateTodoCommandHandler(IApplicationContext db)
     {
-        
+        _db = db;
     }
-    
+
     public async Task<TodoDto> Handle(CreateTodoCommand request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(_db);
         await Task.CompletedTask;
         return new TodoDto();
     }
