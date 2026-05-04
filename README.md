@@ -32,7 +32,7 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **Domain-Driven Design (DDD)** — your business logic lives in a rich `Domain` layer with domain events, not in controllers or services.
 - **Clean Architecture** — dependencies always point inward: `Api` → `Application` → `Domain`; `Infrastructure` implements interfaces defined in `Application`.
 - **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
-- **Repository + Unit of Work** — data access is abstracted behind well-known interfaces so your application layer stays infrastructure-agnostic.
+- **`IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -57,8 +57,8 @@ Every concern is separated into its own project, making the codebase easy to nav
 └─────────────────────────────────────────┘
                 ▲ implements
 ┌───────────────┴─────────────────────────┐
-│         Template.Infrastructure         │  ← EF Core, repositories,
-│   DbContext · Repositories · UoW · SQL  │    unit of work, Redis
+│         Template.Infrastructure         │  ← EF Core `DbContext`,
+│   DbContext impl · SQL · Redis wiring   │    SQL helpers, Redis
 └─────────────────────────────────────────┘
                 ▲ uses
 ┌───────────────┴─────────────────────────┐
@@ -254,47 +254,44 @@ MyApp/
 ├── MyApp.Application/                     # CQRS / use-case layer
 │   ├── Behaviors/
 │   │   └── ValidatorBehavior.cs           # MediatR pipeline: runs FluentValidation before handler
+│   ├── Features/                          # Feature slices (vertical folders)
+│   │   └── Todos/                         # Example feature area
+│   │       ├── Commands/                  # IRequest handlers for writes
+│   │       ├── Queries/                   # IRequest handlers for reads
+│   │       ├── Validators/                # FluentValidation rules for requests in this feature
+│   │       ├── Models/                    # DTOs / read models for this feature (e.g. TodoDto)
+│   │       └── EventHandlers/             # INotificationHandler<T> for domain events (cross-feature OK)
 │   ├── Interfaces/
 │   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
-│   │   ├── IRepository.cs                 # Generic async repository contract
-│   │   └── IUnitOfWork.cs                 # Transaction boundary contract
-│   ├── Commands/                          # (empty — add your command handlers here)
-│   ├── Queries/                           # (empty — add your query handlers here)
-│   ├── Validations/                       # (empty — add your FluentValidation validators here)
-│   ├── ViewModels/                        # (empty — outbound DTO shapes)
-│   ├── DisplayModels/                     # (empty — alternative read-model DTOs)
-│   ├── EventHandlers/                     # (empty — MediatR domain-event handlers)
+│   │   └── IApplicationContext.cs         # Abstraction over EF Core (implemented by `ApplicationContext`)
 │   └── DependencyInjection.cs             # Registers MediatR + FluentValidation validators
 │
 ├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
 │   ├── Models/
-│   │   └── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
-│   │                                      #   domain-event collection, equality by Id
+│   │   ├── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
+│   │   │                                  #   domain-event collection, equality by Id
+│   │   └── DatabaseSequence.cs            # Enum: SQL Server sequences (use [Description] for DB name)
 │   ├── Exceptions/
 │   │   └── DomainException.cs             # Throw for business-rule violations (caught by GlobalExceptionFilter)
 │   ├── Interfaces/
 │   │   └── ISpecifications.cs             # Specification pattern contract
-│   ├── DomainEvents/                      # (empty — add INotification implementations here)
-│   └── Enums/                             # (empty — add domain enumerations here)
+│   └── DomainEvents/                      # INotification domain events (e.g. Todos/TodoCreatedEvent)
 │
 ├── MyApp.Infrastructure/                  # External-system implementations
 │   ├── DataAccess/
-│   │   ├── ApplicationContext.cs          # EF Core DbContext; includes SQL sequence helper
-│   │   ├── Extension/
-│   │   │   └── ApiContextExtension.cs     # DbContext helpers
-│   │   ├── Repository/
-│   │   │   └── Repository.cs              # Generic IRepository<T> implementation
-│   │   └── UnitOfWork/
-│   │       └── UnitOfWork.cs              # IUnitOfWork: SaveChanges + domain-event dispatch
+│   │   ├── ApplicationContext.cs          # EF Core DbContext; implements IApplicationContext;
+│   │   │                                  #   overrides SaveChangesAsync to dispatch domain events
+│   │   └── Extension/
+│   │       └── ApiContextExtension.cs     # DbContext helpers (e.g. sequence helpers)
 │   └── Extensions/
-│       ├── MediatorExtension.cs           # DispatchDomainEventsAsync — called after SaveChanges
+│       ├── MediatorExtension.cs           # DispatchDomainEventsAsync — invoked from ApplicationContext.SaveChangesAsync
 │       ├── QueryableExtension.cs          # IQueryable helpers
 │       ├── SqlExtension.cs                # Raw SQL mapping helpers
 │       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
 │
 └── MyApp.Common/                          # Cross-cutting concerns shared across all layers
     ├── Models/
-    │   ├── ApiResponse.cs                 # Unified JSON envelope: { result, message, errors }
+    │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
     │   ├── AppSettings.cs                 # Strongly-typed appsettings binding
     │   ├── LogModel.cs                    # Structured log entry shape
     │   ├── PagedResult.cs                 # Generic pagination wrapper
@@ -321,10 +318,10 @@ HTTP Request
 [Template.Application] MediatR Pipeline
     │  1. ValidatorBehavior — runs FluentValidation; throws ValidationException on failure
     │  2. YourCommandHandler / YourQueryHandler — executes the use case
-    │     ├── Calls IUnitOfWork.Repository<T>() to read/write domain entities
-    │     └── Calls IUnitOfWork.SaveChangesAsync() to commit
+    │     ├── Uses IApplicationContext (Set<T>(), Add, queries, …) for persistence
+    │     └── Calls IApplicationContext.SaveChangesAsync() to commit
     ▼
-[Template.Infrastructure] UnitOfWork.SaveChangesAsync()
+[Template.Infrastructure] ApplicationContext.SaveChangesAsync()
     │  1. EF Core persists changes to SQL Server
     │  2. MediatorExtension.DispatchDomainEventsAsync() publishes any domain events
     ▼
@@ -429,19 +426,19 @@ public class Product : BaseEntity
 ### 2 — Add a command + handler
 
 ```csharp
-// MyApp.Application/Commands/CreateProductCommand.cs
+// MyApp.Application/Features/Products/Commands/CreateProductCommand.cs
 public record CreateProductCommand(string Name, decimal Price) : IRequest<ApiResponse<string>>;
 
 public class CreateProductHandler : IRequestHandler<CreateProductCommand, ApiResponse<string>>
 {
-    private readonly IUnitOfWork _uow;
-    public CreateProductHandler(IUnitOfWork uow) => _uow = uow;
+    private readonly IApplicationContext _db;
+    public CreateProductHandler(IApplicationContext db) => _db = db;
 
     public async Task<ApiResponse<string>> Handle(CreateProductCommand cmd, CancellationToken ct)
     {
         var product = Product.Create(cmd.Name, cmd.Price);
-        await _uow.Repository<Product>().AddAsync(product);
-        await _uow.SaveChangesAsync(ct);
+        await _db.Set<Product>().AddAsync(product, ct);
+        await _db.SaveChangesAsync(ct);
         return ResponseMessage.Success(product.Id);
     }
 }
@@ -450,7 +447,7 @@ public class CreateProductHandler : IRequestHandler<CreateProductCommand, ApiRes
 ### 3 — Add a validator
 
 ```csharp
-// MyApp.Application/Validations/CreateProductValidator.cs
+// MyApp.Application/Features/Products/Validators/CreateProductValidator.cs
 public class CreateProductValidator : AbstractValidator<CreateProductCommand>
 {
     public CreateProductValidator()

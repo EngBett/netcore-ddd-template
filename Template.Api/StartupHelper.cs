@@ -1,8 +1,6 @@
 using Template.Application;
 using Template.Application.Interfaces;
 using Template.Infrastructure.DataAccess;
-using Template.Infrastructure.DataAccess.Repository;
-using Template.Infrastructure.DataAccess.UnitOfWork;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -98,9 +96,11 @@ public static class StartupHelper
 
     public static void AddDbContext(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<ApplicationContext>(options => { options.UseSqlServer(configuration["DATABASE_CON"]); });
-        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
-        services.AddScoped<IUnitOfWork, UnitofWork>();
+        services.AddDbContext<ApplicationContext>((_, options) =>
+        {
+            options.UseSqlServer(configuration["DATABASE_CON"]);
+        });
+        services.AddScoped<IApplicationContext>(sp => sp.GetRequiredService<ApplicationContext>());
     }
 
     public static void AddApplicationDependencies(this IServiceCollection services, IConfiguration configuration)

@@ -2,14 +2,14 @@
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Template.Domain.Models;
 
 namespace Template.Infrastructure.DataAccess.Extension
 {
     public static class ApiContextExtension
     {
 
-        public static async Task<int> NextValueForSequence(this ApplicationContext pCtx, Sequence pSequence)
+        public static async Task<int> NextValueForSequence(this ApplicationContext pCtx, DatabaseSequence pSequence)
         {
             SqlParameter result = new SqlParameter("@result", System.Data.SqlDbType.Int)
             {
