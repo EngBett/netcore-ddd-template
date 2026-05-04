@@ -3,22 +3,16 @@ using System.Security.Claims;
 using IdentityModel;
 namespace Template.Api.Services
 {
-    public class CurrentUserService : ICurrentUserService
+    public class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICurrentUserService
     {
-        private readonly IHttpContextAccessor httpContextAccessor;
+        public string? UserId => httpContextAccessor?.HttpContext?.User?.FindFirstValue(JwtClaimTypes.Id) ?? "";
 
-        public CurrentUserService(IHttpContextAccessor httpContextAccessor)
-        {
-            this.httpContextAccessor = httpContextAccessor;
-        }
-        public string UserId => this.httpContextAccessor?.HttpContext?.User?.FindFirstValue(JwtClaimTypes.Id) ?? "";
+        public string? Email => httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);
 
-        public string Email => this.httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);
+        public string? PhoneNumber => httpContextAccessor?.HttpContext?.User?.FindFirstValue(JwtClaimTypes.PhoneNumber);
 
-        public string PhoneNumber => this.httpContextAccessor?.HttpContext?.User?.FindFirstValue(JwtClaimTypes.PhoneNumber);
-
-        public string Customer => $"{this.httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.GivenName)}" +
-            $" {this.httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Surname)}";
+        public string? Customer => $"{httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.GivenName)}" +
+            $" {httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Surname)}";
 
     }
 }

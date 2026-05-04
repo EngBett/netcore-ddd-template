@@ -18,14 +18,5 @@
         <ProjectReference Include="..\Template.Common\Template.Common.csproj" />
         <ProjectReference Include="..\Template.Domain\Template.Domain.csproj" />
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Commands" />
-      <Folder Include="DisplayModels" />
-      <Folder Include="EventHandlers" />
-      <Folder Include="Queries" />
-      <Folder Include="Validations" />
-      <Folder Include="ViewModels" />
-    </ItemGroup>
     
 </Project>

@@ -12,6 +12,7 @@ using StackExchange.Redis;
 using Template.Common.Models;
 using Template.Api.Filters;
 using Template.Api.Services;
+using Template.Common.Options;
 
 namespace Template.Api;
 
@@ -53,7 +54,7 @@ public static class StartupHelper
     {
         app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         app.UseHealthChecks("/_health");
-        var appsettings = app.Configuration.GetSection(AppSettings.Name).Get<AppSettings>();
+        var appsettings = app.Configuration.GetSection(nameof(ApplicationOptions)).Get<ApplicationOptions>();
         if (appsettings is { ShowSwagger: true })
         {
             app.UseSwagger();
@@ -73,9 +74,9 @@ public static class StartupHelper
 
     public static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
-        IConfigurationSection appSettingsSection = configuration.GetSection("AppSettings");
-        services.Configure<AppSettings>(appSettingsSection);
-        var appSettings = appSettingsSection.Get<AppSettings>();
+        IConfigurationSection appSettingsSection = configuration.GetSection("ApplicationOptions");
+        services.Configure<ApplicationOptions>(appSettingsSection);
+        var appSettings = appSettingsSection.Get<ApplicationOptions>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {

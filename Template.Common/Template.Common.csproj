@@ -11,9 +11,9 @@
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
 
-    <ItemGroup>
+    <!--<ItemGroup>
         <ProjectReference Include="..\Template.Domain\Template.Domain.csproj" />
-    </ItemGroup>
+    </ItemGroup>-->
 
     <ItemGroup>
       <Folder Include="Shared\" />
