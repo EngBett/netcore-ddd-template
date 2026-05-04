@@ -342,9 +342,10 @@ MyApp/
 │       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
 │
 └── MyApp.Common/                          # Cross-cutting concerns shared across all layers
+    ├── Options/
+    │   └── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
     ├── Models/
     │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
-    │   ├── AppSettings.cs                 # Strongly-typed appsettings binding
     │   ├── LogModel.cs                    # Structured log entry shape
     │   ├── PagedResult.cs                 # Generic pagination wrapper
     │   └── ResponseEnums.cs               # ResponseCodes enum: Success, Fail, NotFound, …
@@ -392,7 +393,7 @@ HTTP Request
 
 ## Configuration
 
-All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file.
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under the **`ApplicationOptions`** section, which binds to `Template.Common/Options/ApplicationOptions.cs` (see `StartupHelper` and `Program`).
 
 ```json
 {
@@ -400,11 +401,19 @@ All settings live in `appsettings.json`. Override them with environment variable
   "DATABASE_CON": "Server=localhost,1433;Database=MyApp;User Id=sa;Password=YourPassword;TrustServerCertificate=True;",
   "Redis": "localhost:6379",
   "ApplicationOptions": {
+    "LogUrl": "http://localhost:5341",
     "Authority": "",
     "Audience": "/resources",
+    "Queue": "",
+    "ClientId": "",
+    "ClientSecret": "secret",
+    "SensitiveDataKeys": "pan,authorization,secret,...",
+    "SensitiveDataDefaultValues": "pan,authorization,...",
     "EnableAutoMigration": true,
+    "UseLoggerMiddleWare": true,
     "RequireHttpsMetadata": true,
-    "SensitiveDataKeys": "password,token,secret,..."
+    "MetadataAddress": "/.well-known/openid-configuration",
+    "ShowSwagger": true
   },
   "Logging": {
     "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning" }
@@ -417,9 +426,15 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `DatabaseKind` | Active EF Core provider: `mssql`, `postgres`, `sqlite`, or `mysql` (must match packages and connection string format) |
 | `DATABASE_CON` | Database connection string for the selected provider |
 | `Redis` | Redis connection string (`host:port`) |
+| `ApplicationOptions.LogUrl` | Seq or other structured log sink URL (used when configuring Serilog) |
 | `ApplicationOptions.Authority` | JWT authority (your identity provider URL) |
 | `ApplicationOptions.Audience` | JWT audience |
+| `ApplicationOptions.MetadataAddress` | Optional OIDC metadata path or URL fragment |
+| `ApplicationOptions.SensitiveDataKeys` | Comma-separated keys to redact in logs |
 | `ApplicationOptions.EnableAutoMigration` | When true, `Program` applies EF Core migrations on startup |
+| `ApplicationOptions.UseLoggerMiddleWare` | Feature flag for request logging middleware (if wired) |
+| `ApplicationOptions.RequireHttpsMetadata` | Passed to JWT bearer metadata retrieval when configured |
+| `ApplicationOptions.ShowSwagger` | When true, Swagger UI is registered in the HTTP pipeline (`StartupHelper`) |
 
 ---
 
