@@ -93,9 +93,11 @@ namespace Template.Api.Filters
             context.Result = new BadRequestObjectResult(details);
 
             context.ExceptionHandled = true;
-            var response = new ApiResponse<IEnumerable<string>>();
+            var response = new ApiResponse<IEnumerable<string>>
+            {
+                Code = ResponseEnums.ResponseCodes.ValidationError
+            };
 
-            response.Code = ResponseEnums.ResponseCodes.ValidationError;
             var message = context.ModelState.Values.SelectMany(a => a.Errors).Select(e => e.ErrorMessage);
             var lst = new List<string>();
             lst.AddRange(message);
@@ -109,16 +111,16 @@ namespace Template.Api.Filters
             message = null;
             switch (dbUpdateEx.InnerException)
             {
-                case SqlException sql when sql.Number is 2627 or 2601:
+                case SqlException { Number: 2627 or 2601 } sql:
                     message = UniqueErrorFormatter(sql, dbUpdateEx.Entries);
                     return message != null;
-                case PostgresException pg when pg.SqlState == "23505":
+                case PostgresException { SqlState: "23505" } pg:
                     message = pg.Message;
                     return true;
-                case SqliteException sqlite when sqlite.SqliteExtendedErrorCode == 2067:
+                case SqliteException { SqliteExtendedErrorCode: 2067 } sqlite:
                     message = sqlite.Message;
                     return true;
-                case MySqlException my when my.Number == 1062:
+                case MySqlException { Number: 1062 } my:
                     message = my.Message;
                     return true;
                 default:

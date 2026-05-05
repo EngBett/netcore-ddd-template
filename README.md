@@ -17,6 +17,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
   - [Template.Application](#templateapplication)
   - [Template.Domain](#templatedomain)
   - [Template.Infrastructure](#templateinfrastructure)
+  - 
   - [Template.Common](#templatecommon)
 - [Data Flow (Request Lifecycle)](#data-flow-request-lifecycle)
 - [Configuration](#configuration)
@@ -34,7 +35,7 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **Domain-Driven Design (DDD)** — your business logic lives in a rich `Domain` layer with domain events, not in controllers or services.
 - **Clean Architecture** — dependencies always point inward: `Api` → `Application` → `Domain`; `Infrastructure` implements interfaces defined in `Application`.
 - **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
-- **`IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
+- `**IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
 - **Messaging** — **MassTransit** is configured in `Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (queues/exchanges are created by MassTransit’s **topologies** when the bus starts).
 
@@ -77,21 +78,23 @@ Every concern is separated into its own project, making the codebase easy to nav
 
 ## Key Technologies
 
-| Technology | Purpose |
-|---|---|
-| **.NET 10** | Runtime and SDK |
-| **ASP.NET Core 10** | Web host, middleware pipeline |
-| **Entity Framework Core 10** | ORM (SQL Server, PostgreSQL, SQLite, or MySQL) and code-first migrations |
-| **MediatR 12** | In-process messaging for CQRS (commands, queries, domain events) |
-| **FluentValidation 12** | Request validation wired into the MediatR pipeline |
-| **Serilog** | Structured logging to console and Seq |
-| **Swashbuckle / OpenAPI** | Swagger UI for API exploration |
-| **JWT Bearer** | Authentication via `Microsoft.AspNetCore.Authentication.JwtBearer` |
-| **Redis** | Distributed caching via `StackExchange.Redis` |
-| **Prometheus** | Metrics scraping endpoint at `/metrics` |
-| **FastEndpoints 8** | *(optional)* Slim, high-performance endpoint model |
-| **IdentityModel** | JWT claim helpers |
-| **MassTransit 8** | Asynchronous messaging; **RabbitMQ** transport with configurable consumers |
+
+| Technology                   | Purpose                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| **.NET 10**                  | Runtime and SDK                                                            |
+| **ASP.NET Core 10**          | Web host, middleware pipeline                                              |
+| **Entity Framework Core 10** | ORM (SQL Server, PostgreSQL, SQLite, or MySQL) and code-first migrations   |
+| **MediatR 12**               | In-process messaging for CQRS (commands, queries, domain events)           |
+| **FluentValidation 12**      | Request validation wired into the MediatR pipeline                         |
+| **Serilog**                  | Structured logging to console and Seq                                      |
+| **Swashbuckle / OpenAPI**    | Swagger UI for API exploration                                             |
+| **JWT Bearer**               | Authentication via `Microsoft.AspNetCore.Authentication.JwtBearer`         |
+| **Redis**                    | Distributed caching via `StackExchange.Redis`                              |
+| **Prometheus**               | Metrics scraping endpoint at `/metrics`                                    |
+| **FastEndpoints 8**          | *(optional)* Slim, high-performance endpoint model                         |
+| **IdentityModel**            | JWT claim helpers                                                          |
+| **MassTransit 8**            | Asynchronous messaging; **RabbitMQ** transport with configurable consumers |
+
 
 ---
 
@@ -162,27 +165,31 @@ dotnet new ddd-template --name MyApp --output ./src/MyApp
 
 ### Template Options
 
-| Option | Values | Default | Description |
-|--------|--------|---------|-------------|
-| `--apiStyle` (`-ap`) | `controllers` · `minimal` · `fastendpoints` | `controllers` | Selects the HTTP endpoint pattern |
-| `--database` (`-db`) | `mssql` · `postgres` · `sqlite` · `mysql` | `mssql` | Selects the EF Core relational provider and sample connection settings |
-| `--postgres` | boolean | `false` | Shortcut for `--database postgres` |
-| `--mysql` | boolean | `false` | Shortcut for `--database mysql` |
-| `--sqlite` | boolean | `false` | Shortcut for `--database sqlite` |
-| `--mssql` | boolean | `false` | Shortcut for `--database mssql` (explicit SQL Server) |
+
+| Option               | Values                                      | Default       | Description                                                            |
+| -------------------- | ------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| `--apiStyle` (`-ap`) | `controllers` · `minimal` · `fastendpoints` | `controllers` | Selects the HTTP endpoint pattern                                      |
+| `--database` (`-db`) | `mssql` · `postgres` · `sqlite` · `mysql`   | `mssql`       | Selects the EF Core relational provider and sample connection settings |
+| `--postgres`         | boolean                                     | `false`       | Shortcut for `--database postgres`                                     |
+| `--mysql`            | boolean                                     | `false`       | Shortcut for `--database mysql`                                        |
+| `--sqlite`           | boolean                                     | `false`       | Shortcut for `--database sqlite`                                       |
+| `--mssql`            | boolean                                     | `false`       | Shortcut for `--database mssql` (explicit SQL Server)                  |
+
 
 If several `--postgres` / `--mysql` / `--sqlite` flags are passed together, resolution order is: **postgres**, then **mysql**, then **sqlite**. Otherwise the `--database` choice applies (default **mssql** when no flags are set).
 
 ### Database providers
 
-The generated **Api** project references every EF Core provider package; at runtime the active provider is selected from **`DatabaseKind`** in `appsettings.json` (`mssql`, `postgres`, `sqlite`, or `mysql`). The template ships alternate sample files (`appsettings.Database.*.json`) and renames the selected one to `appsettings.json` when you run `dotnet new`, so you get a matching **`DATABASE_CON`** for local development.
+The generated **Api** project references every EF Core provider package; at runtime the active provider is selected from `**DatabaseKind`** in `appsettings.json` (`mssql`, `postgres`, `sqlite`, or `mysql`). The template ships alternate sample files (`appsettings.Database.*.json`) and renames the selected one to `appsettings.json` when you run `dotnet new`, so you get a matching `**DATABASE_CON**` for local development.
 
-| Provider | `DatabaseKind` | Notes |
-|----------|----------------|--------|
-| Microsoft SQL Server | `mssql` | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer` |
-| PostgreSQL | `postgres` | `UseNpgsql`, Npgsql provider |
-| SQLite | `sqlite` | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON` |
-| MySQL | `mysql` | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `Template.Infrastructure/DependencyInjection.cs` if you use another server version |
+
+| Provider             | `DatabaseKind` | Notes                                                                                                                                                                    |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Microsoft SQL Server | `mssql`        | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer`                                                                                                                |
+| PostgreSQL           | `postgres`     | `UseNpgsql`, Npgsql provider                                                                                                                                             |
+| SQLite               | `sqlite`       | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON`                                                                                        |
+| MySQL                | `mysql`        | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `Template.Infrastructure/DependencyInjection.cs` if you use another server version |
+
 
 **Updating an existing project:** set `DatabaseKind` and `DATABASE_CON` in configuration to switch providers; no need to re-run the template.
 
@@ -201,6 +208,7 @@ MyApp.Api/
 ```
 
 Add a new controller:
+
 ```csharp
 [ApiController]
 [Route("api/v1/[controller]")]
@@ -226,6 +234,7 @@ MyApp.Api/
 ```
 
 Add a new endpoint group:
+
 ```csharp
 // In MinimalApiEndpointRegistration.cs
 public static WebApplication MapMinimalApiEndpoints(this WebApplication app)
@@ -255,6 +264,7 @@ MyApp.Api/
 ```
 
 Add a new endpoint:
+
 ```csharp
 public class GetProductsEndpoint : EndpointWithoutRequest<ApiResponse<List<ProductDto>>>
 {
@@ -394,6 +404,7 @@ HTTP Request
 ```
 
 **Error handling**: unhandled exceptions bubble up to `GlobalExceptionFilter`, which maps:
+
 - `DomainException` → `400 Bad Request`
 - EF Core **unique-constraint** violations (SQL Server, PostgreSQL, SQLite, MySQL) → `400 Bad Request` with a human-readable or provider message
 - Any other exception → `500 Internal Server Error` (with full detail in Development)
@@ -402,7 +413,7 @@ HTTP Request
 
 ## Configuration
 
-All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under **`ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses **`RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in **`Template.Infrastructure/DependencyInjection.cs`**. **MassTransit** reads **`RabbitMQOptions`**, **`MassTransitOptions`** (retries, delayed redelivery, in-memory outbox), and registers consumers in **`Template.Application/DependencyInjection.cs`**. The HTTP pipeline lives in **`Template.Api/DependencyInjection.cs`**—see `Program.cs`.
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under `**ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses `**RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in `**Template.Infrastructure/DependencyInjection.cs**`. **MassTransit** reads `**RabbitMQOptions`**, `**MassTransitOptions**` (retries, delayed redelivery, in-memory outbox), and registers consumers in `**Template.Application/DependencyInjection.cs**`. The HTTP pipeline lives in `**Template.Api/DependencyInjection.cs**`—see `Program.cs`.
 
 ```json
 {
@@ -446,36 +457,38 @@ All settings live in `appsettings.json`. Override them with environment variable
 }
 ```
 
-| Key | Description |
-|-----|-------------|
-| `DatabaseKind` | Active EF Core provider: `mssql`, `postgres`, `sqlite`, or `mysql` (must match packages and connection string format) |
-| `DATABASE_CON` | Database connection string for the selected provider |
-| `RedisOptions.ConnectionString` | StackExchange.Redis connection (e.g. `host:port` or full connection string) |
-| `RedisOptions.InstanceName` | Prefix for cache keys when using `IDistributedCache` |
-| `MassTransitOptions.EnableInMemoryOutbox` | When true, MassTransit uses the in-memory outbox for send/publish with consumer retries |
-| `MassTransitOptions.RetryIntervalsMilliseconds` | Immediate consumer retry delays (ms); omit or use `[]` to skip `UseMessageRetry` |
-| `MassTransitOptions.EnableDelayedRedelivery` | When true, schedules extra delayed redelivery after retries (RabbitMQ transport) |
-| `MassTransitOptions.RedeliveryIntervalsSeconds` | Delayed redelivery schedule (seconds) when enabled |
-| `RabbitMQOptions.HostName` | RabbitMQ server hostname (MassTransit) |
-| `RabbitMQOptions.Port` | AMQP port (default **5672**) |
-| `RabbitMQOptions.UserName` / `Password` | Broker credentials |
-| `RabbitMQOptions.VirtualHost` | Virtual host (e.g. **`/`** for the default vhost) |
-| `ApplicationOptions.LogUrl` | Seq or other structured log sink URL (used when configuring Serilog) |
-| `ApplicationOptions.Authority` | JWT authority (your identity provider URL) |
-| `ApplicationOptions.Audience` | JWT audience |
-| `ApplicationOptions.MetadataAddress` | Optional OIDC metadata path or URL fragment |
-| `ApplicationOptions.SensitiveDataKeys` | Comma-separated keys to redact in logs |
-| `ApplicationOptions.EnableAutoMigration` | When true, `Program` applies EF Core migrations on startup |
-| `ApplicationOptions.UseLoggerMiddleWare` | Feature flag for request logging middleware (if wired) |
-| `ApplicationOptions.RequireHttpsMetadata` | Passed to JWT bearer metadata retrieval when configured |
-| `ApplicationOptions.ShowSwagger` | When true, Swagger UI is registered in the HTTP pipeline (`Template.Api/DependencyInjection.ConfigureMiddleware`) |
+
+| Key                                             | Description                                                                                                           |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `DatabaseKind`                                  | Active EF Core provider: `mssql`, `postgres`, `sqlite`, or `mysql` (must match packages and connection string format) |
+| `DATABASE_CON`                                  | Database connection string for the selected provider                                                                  |
+| `RedisOptions.ConnectionString`                 | StackExchange.Redis connection (e.g. `host:port` or full connection string)                                           |
+| `RedisOptions.InstanceName`                     | Prefix for cache keys when using `IDistributedCache`                                                                  |
+| `MassTransitOptions.EnableInMemoryOutbox`       | When true, MassTransit uses the in-memory outbox for send/publish with consumer retries                               |
+| `MassTransitOptions.RetryIntervalsMilliseconds` | Immediate consumer retry delays (ms); omit or use `[]` to skip `UseMessageRetry`                                      |
+| `MassTransitOptions.EnableDelayedRedelivery`    | When true, schedules extra delayed redelivery after retries (RabbitMQ transport)                                      |
+| `MassTransitOptions.RedeliveryIntervalsSeconds` | Delayed redelivery schedule (seconds) when enabled                                                                    |
+| `RabbitMQOptions.HostName`                      | RabbitMQ server hostname (MassTransit)                                                                                |
+| `RabbitMQOptions.Port`                          | AMQP port (default **5672**)                                                                                          |
+| `RabbitMQOptions.UserName` / `Password`         | Broker credentials                                                                                                    |
+| `RabbitMQOptions.VirtualHost`                   | Virtual host (e.g. `**/`** for the default vhost)                                                                     |
+| `ApplicationOptions.LogUrl`                     | Seq or other structured log sink URL (used when configuring Serilog)                                                  |
+| `ApplicationOptions.Authority`                  | JWT authority (your identity provider URL)                                                                            |
+| `ApplicationOptions.Audience`                   | JWT audience                                                                                                          |
+| `ApplicationOptions.MetadataAddress`            | Optional OIDC metadata path or URL fragment                                                                           |
+| `ApplicationOptions.SensitiveDataKeys`          | Comma-separated keys to redact in logs                                                                                |
+| `ApplicationOptions.EnableAutoMigration`        | When true, `Program` applies EF Core migrations on startup                                                            |
+| `ApplicationOptions.UseLoggerMiddleWare`        | Feature flag for request logging middleware (if wired)                                                                |
+| `ApplicationOptions.RequireHttpsMetadata`       | Passed to JWT bearer metadata retrieval when configured                                                               |
+| `ApplicationOptions.ShowSwagger`                | When true, Swagger UI is registered in the HTTP pipeline (`Template.Api/DependencyInjection.ConfigureMiddleware`)     |
+
 
 ## Messaging (MassTransit + RabbitMQ)
 
-- **Configuration** is bound from **`RabbitMQOptions`**, **`MassTransitOptions`**, and (for cache) **`RedisOptions`** in `Template.Common` (see `appsettings.json`).
-- **Registration** lives in **`Template.Application/DependencyInjection.cs`**: `AddMassTransit` uses the **RabbitMQ** transport, optional **`AddInMemoryOutbox()`** (from `MassTransitOptions.EnableInMemoryOutbox`), `AddConsumer<T>()` registers consumers, **`UseMessageRetry`** / **`UseDelayedRedelivery`** apply resilience from `MassTransitOptions`, and **`ConfigureEndpoints`** creates receive endpoints (queue names follow MassTransit’s default **kebab-case** endpoint naming, e.g. for `TodoMessageConsumer`).
+- **Configuration** is bound from `**RabbitMQOptions`**, `**MassTransitOptions**`, and (for cache) `**RedisOptions**` in `Template.Common` (see `appsettings.json`).
+- **Registration** lives in `**Template.Application/DependencyInjection.cs`**: `AddMassTransit` uses the **RabbitMQ** transport, optional `**AddConfigureEndpointsCallback`** + `**UseInMemoryOutbox(registrationContext)**` when `MassTransitOptions.EnableInMemoryOutbox` is true, `AddConsumer<T>()` registers consumers, `**UseMessageRetry**` / `**UseDelayedRedelivery**` apply resilience from `MassTransitOptions`, and `**ConfigureEndpoints**` creates receive endpoints (queue names follow MassTransit’s default **kebab-case** endpoint naming, e.g. for `TodoMessageConsumer`).
 - **Example consumer**: `Template.Application/Consumers/TodoMessageConsumer.cs` implements `IConsumer<TodoMessage>`; the message type is `Template.Common/Messages/Todos/TodoMessage.cs`.
-- **Publishing** from the API or application layer: inject **`IPublishEndpoint`** or **`ISendEndpointProvider`** (or the MassTransit **`IBus`**) and publish/send `TodoMessage` (or your own contract types) so the consumer can process them—add any new message types and consumers in the same way.
+- **Publishing** from the API or application layer: inject `**IPublishEndpoint`** or `**ISendEndpointProvider**` (or the MassTransit `**IBus**`) and publish/send `TodoMessage` (or your own contract types) so the consumer can process them—add any new message types and consumers in the same way.
 - The API host starts the **MassTransit bus** as a hosted service when the process starts; ensure RabbitMQ is reachable or startup will fail.
 
 ---
@@ -485,14 +498,12 @@ All settings live in `appsettings.json`. Override them with environment variable
 **Prerequisites**: .NET 10 SDK, Docker (optional; Redis is optional if you change caching later).
 
 1. **Install the template** (see [Installation](#installation)), then create a project with the database you need, for example:
-   ```bash
+  ```bash
    dotnet new install /path/to/this/repo
    dotnet new ddd-template --name MyApp --postgres --output ./src/MyApp
-   ```
-
+  ```
 2. **Start infrastructure** that matches `DatabaseKind` in `appsettings.json`:
-
-   ```bash
+  ```bash
    # SQL Server (DatabaseKind: mssql)
    docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Password@123" \
               -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
@@ -515,19 +526,16 @@ All settings live in `appsettings.json`. Override them with environment variable
 
    # Seq (optional — structured log viewer)
    docker run -p 5341:5341 -p 80:80 -d datalust/seq
-   ```
-
-3. **Update `appsettings.json`** so `DATABASE_CON`, **`RedisOptions`**, **`RabbitMQOptions`**, and **`MassTransitOptions`** match your environment.
-
+  ```
+3. **Update `appsettings.json`** so `DATABASE_CON`, `**RedisOptions**`, `**RabbitMQOptions**`, and `**MassTransitOptions**` match your environment.
 4. **Run the API:**
-   ```bash
+  ```bash
    dotnet run --project MyApp.Api
-   ```
-
+  ```
 5. **Browse:**
-   - Swagger UI → `https://localhost:7254/swagger`
-   - Health check → `https://localhost:7254/_health`
-   - Metrics → `https://localhost:7254/metrics`
+  - Swagger UI → `https://localhost:7254/swagger`
+  - Health check → `https://localhost:7254/_health`
+  - Metrics → `https://localhost:7254/metrics`
 
 ---
 
@@ -616,6 +624,7 @@ dotnet nuget push ./nupkg/*.nupkg \
 ```
 
 Once published, anyone can install it with:
+
 ```bash
 dotnet new install EngBett.DDD.Template
 ```
