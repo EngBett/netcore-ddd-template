@@ -2,6 +2,8 @@ using Template.Api;
 using Template.Infrastructure.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Template.Infrastructure;
+using Template.Application;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.ConfigureAppConfiguration((hostingContext, config) =>
@@ -13,7 +15,10 @@ builder.Host.ConfigureAppConfiguration((hostingContext, config) =>
 });
 
 // Add services to the container.
-builder.Services.ConfigureServices(builder.Configuration);
+builder.Services.AddApiDependencies(builder.Configuration);
+builder.Services.AddApplicationDependencies(builder.Configuration);
+builder.Services.AddInfrastructureDependencies(builder.Configuration);
+
 builder.Host.UseSerilog((ctx, lc) => lc
     .WriteTo.Console()
     .WriteTo.Seq("http://localhost:5341"));

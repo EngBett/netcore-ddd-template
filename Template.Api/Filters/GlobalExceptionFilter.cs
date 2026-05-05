@@ -1,8 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
+using MySqlConnector;
+using Npgsql;
 using System.Net;
 using System.Text.RegularExpressions;
 using Template.Common.Models;
@@ -38,24 +41,19 @@ namespace Template.Api.Filters
 
                 context.Result = new BadRequestObjectResult(apiResponse);
             }
+            else if (context.Exception is DbUpdateException dbUpdateException && TryMapUniqueViolation(dbUpdateException, out var uniqueMessage))
+            {
+                apiResponse.Message = uniqueMessage ?? "A unique constraint was violated.";
+                context.HttpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+
+                context.Result = new BadRequestObjectResult(apiResponse);
+            }
             else if (context.Exception.GetType() == typeof(DbUpdateException))
             {
                 var dbUpdateEx = context.Exception as DbUpdateException;
-                var sqlEx = dbUpdateEx?.InnerException as SqlException;
-                if (sqlEx != null && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
-                {
-                    //This is a DbUpdateException on a SQL database
-                    apiResponse.Message = UniqueErrorFormatter(sqlEx, dbUpdateEx.Entries);
-                    context.HttpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-
-                    context.Result = new BadRequestObjectResult(apiResponse);
-                }
-                else
-                {
-                    apiResponse.Message = $"An error occurred,please try again Error Code: {logKey}";
-                    LogError(context, logKey);
-                    context.Result = new BadRequestObjectResult(apiResponse);
-                }
+                apiResponse.Message = $"An error occurred,please try again Error Code: {logKey}";
+                LogError(context, logKey);
+                context.Result = new BadRequestObjectResult(apiResponse);
             }
             else if (!context.ModelState.IsValid)
             {
@@ -68,8 +66,7 @@ namespace Template.Api.Filters
                 {
                     apiResponse.Message = context.Exception.ToString();
                 }
-                // Result asigned to a result object but in destiny the response is empty. This is a known bug of .net core 1.1
-                // It will be fixed in .net core 1.1.2. See https://github.com/aspnet/Mvc/issues/5594 for more information
+                // Result asigned to a result object but in destiny the response is empty. It was a known bug of .net core 1.1
 
                 context.Result = new BadRequestObjectResult(apiResponse);
                 context.HttpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
@@ -104,10 +101,32 @@ namespace Template.Api.Filters
             lst.AddRange(message);
             response.Message = lst.FirstOrDefault();
             response.Errors = lst;
-            //   response.ErrorList = lst;
             context.Result = new BadRequestObjectResult(response);
         }
-        public static string UniqueErrorFormatter(SqlException ex, IReadOnlyList<EntityEntry> entitiesNotSaved)
+
+        private static bool TryMapUniqueViolation(DbUpdateException dbUpdateEx, out string? message)
+        {
+            message = null;
+            switch (dbUpdateEx.InnerException)
+            {
+                case SqlException sql when sql.Number is 2627 or 2601:
+                    message = UniqueErrorFormatter(sql, dbUpdateEx.Entries);
+                    return message != null;
+                case PostgresException pg when pg.SqlState == "23505":
+                    message = pg.Message;
+                    return true;
+                case SqliteException sqlite when sqlite.SqliteExtendedErrorCode == 2067:
+                    message = sqlite.Message;
+                    return true;
+                case MySqlException my when my.Number == 1062:
+                    message = my.Message;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        public static string? UniqueErrorFormatter(SqlException ex, IReadOnlyList<EntityEntry> entitiesNotSaved)
         {
             var message = ex.Errors[0].Message;
             var matches = UniqueConstraintRegex.Matches(message);
@@ -115,7 +134,6 @@ namespace Template.Api.Filters
             if (matches.Count == 0)
                 return null;
 
-            //currently the entitiesNotSaved is empty for unique constraints - see https://github.com/aspnet/EntityFrameworkCore/issues/7829
             var entityDisplayName = entitiesNotSaved.Count == 1
                 ? entitiesNotSaved.Single().Entity.GetType().Name
                 : matches[0].Groups[1].Value;
