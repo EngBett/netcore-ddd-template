@@ -45,7 +45,7 @@
         <Compile Remove="Program.Controllers.cs" />
         <Compile Remove="Program.Minimal.cs" />
         <Compile Remove="Program.FastEndpoints.cs" />
-        <Compile Remove="Endpoints\**" />
+        <Compile Remove="FastEndpoints\**" />
     </ItemGroup>
 
 </Project>
