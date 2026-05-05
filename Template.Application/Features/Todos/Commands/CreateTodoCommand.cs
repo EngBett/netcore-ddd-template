@@ -1,16 +1,17 @@
 using MediatR;
 using Template.Application.Features.Todos.Models;
 using Template.Application.Interfaces;
+using Template.Common.Models;
 
 namespace Template.Application.Features.Todos.Commands;
 
-public class CreateTodoCommand : IRequest<TodoDto>
+public class CreateTodoCommand : IRequest<ApiResponse<TodoDto>>
 {
     public string Title { get; set; } = null!;
     public string Description { get; set; } = null!;
 }
 
-public class CreateTodoCommandHandler : IRequestHandler<CreateTodoCommand, TodoDto>
+public class CreateTodoCommandHandler : IRequestHandler<CreateTodoCommand, ApiResponse<TodoDto>>
 {
     private readonly IApplicationContext _db;
 
@@ -19,10 +20,10 @@ public class CreateTodoCommandHandler : IRequestHandler<CreateTodoCommand, TodoD
         _db = db;
     }
 
-    public async Task<TodoDto> Handle(CreateTodoCommand request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<TodoDto>> Handle(CreateTodoCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(_db);
         await Task.CompletedTask;
-        return new TodoDto();
+        return ResponseMessage.Success(new TodoDto());
     }
 }

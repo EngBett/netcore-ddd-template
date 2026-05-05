@@ -1,4 +1,5 @@
-using Template.Common.Models;
+using MediatR;
+using Template.Application.Features.Todos.Queries;
 
 namespace Template.Api.MinimalApiEndpoints;
 
@@ -19,13 +20,10 @@ public static class MinimalApiEndpointRegistration
     {
         var group = app.MapGroup("/api/v1/test").AllowAnonymous();
 
-        group.MapGet("/", () =>
+        group.MapGet("/", async (string userId, ISender sender, CancellationToken cancellationToken) =>
         {
-            var response = new ApiResponse<object>
-            {
-                Message = "Works well",
-                Result = new { Msg = "Test works" }
-            };
+            var query = new GetTodosQuery { UserId = userId };
+            var response = await sender.Send(query, cancellationToken);
             return Results.Ok(response);
         })
         .WithName("GetTest");
