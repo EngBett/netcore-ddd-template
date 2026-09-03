@@ -11,8 +11,9 @@ namespace Template.Domain.Models
 
         public virtual string Id { get; set; } = Guid.NewGuid().ToString();
 
-        private List<INotification> _domainEvents;
-        public IReadOnlyCollection<INotification> DomainEvents => _domainEvents?.AsReadOnly();
+        private List<INotification>? _domainEvents;
+        public IReadOnlyCollection<INotification> DomainEvents =>
+            _domainEvents?.AsReadOnly() ?? (IReadOnlyCollection<INotification>)Array.Empty<INotification>();
 
         public void AddDomainEvent(INotification eventItem)
         {
@@ -35,7 +36,7 @@ namespace Template.Domain.Models
             return Id == default;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj == null || !(obj is BaseEntity))
                 return false;

@@ -6,7 +6,7 @@ namespace Template.Common.Models
     public class ApiResponse<T>
     {
         [JsonPropertyName("result")]
-        public T Result { get; set; }
+        public T? Result { get; set; }
         [JsonPropertyName("message")]
         public string? Message { get; set; }
 
@@ -18,7 +18,7 @@ namespace Template.Common.Models
 
     public static class ResponseMessage
     {
-        public static ApiResponse<T> Success<T>(T data, string message = null)
+        public static ApiResponse<T> Success<T>(T data, string? message = null)
         {
             return new ApiResponse<T>
             {
@@ -31,8 +31,8 @@ namespace Template.Common.Models
 
         public static ApiResponse<T> Error<T>(
             T result,
-            string error = null,
-            IEnumerable<string> errors = null,
+            string? error = null,
+            IEnumerable<string>? errors = null,
             ResponseEnums.ResponseCodes responseCodes = ResponseEnums.ResponseCodes.Fail)
         {
             return new ApiResponse<T>
@@ -41,7 +41,7 @@ namespace Template.Common.Models
                 Code = responseCodes,
                 Message = error ?? "An Error Occurred,Please try again",
                 Result = result,
-                Errors = errors
+                Errors = errors ?? []
 
             };
         }

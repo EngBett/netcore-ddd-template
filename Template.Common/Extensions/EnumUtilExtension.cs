@@ -12,10 +12,14 @@ namespace Template.Common.Extensions
 
         public static string GetDescription(this Enum value)
         {
-            return ((DescriptionAttribute)Attribute.GetCustomAttribute(
-                value.GetType().GetFields(BindingFlags.Public | BindingFlags.Static)
-                    .Single(x => x.GetValue(null).Equals(value)),
-                typeof(DescriptionAttribute)))?.Description ?? value.ToString();
+            var field = value.GetType()
+                .GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => value.Equals(x.GetValue(null)));
+
+            var description = Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute))
+                as DescriptionAttribute;
+
+            return description?.Description ?? value.ToString();
         }
     }
 }
