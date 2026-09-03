@@ -9,8 +9,14 @@
     <ItemGroup>
         <PackageReference Include="FluentValidation" Version="12.0.0" />
         <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
-        <PackageReference Include="MassTransit" Version="8.5.9" />
-        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.9" />
+    <!-- MassTransit is pinned to a range that excludes 9.x deliberately.
+         8.x is Apache-2.0; from 9.0 the package moved to a proprietary Massient
+         licence, which is a commercial decision for whoever ships a service built
+         from this template rather than a routine upgrade. A bare "8.5.10" would be
+         a minimum and could resolve to 9.x; the bounded range cannot.
+         Note that `dotnet add package MassTransit` resolves to 9.x by default. -->
+        <PackageReference Include="MassTransit" Version="[8.5.10,9.0.0)" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="[8.5.10,9.0.0)" />
         <PackageReference Include="MediatR" Version="12.5.0" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.7" />
