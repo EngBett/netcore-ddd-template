@@ -130,6 +130,29 @@
   },
   "sources": [
     {
+      "exclude": [
+        "**/*.filelist",
+        "**/*.lock.json",
+        "**/*.nuspec",
+        "**/*.user",
+        "**/.vs/**",
+        "**/bin/**",
+        "**/node_modules/**",
+        "**/obj/**",
+        ".claude/**",
+        ".cursor/**",
+        ".git/**",
+        ".github/**",
+        ".gitignore",
+        ".idea/**",
+        ".template.config/**",
+        ".vs/**",
+        "AGENT.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "README.md",
+        "global.json"
+      ],
       "modifiers": [
         {
           "condition": "(useControllers)",

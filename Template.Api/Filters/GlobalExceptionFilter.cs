@@ -2,10 +2,18 @@
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+//#if (useMssql)
 using Microsoft.Data.SqlClient;
+//#endif
+//#if (useSqlite)
 using Microsoft.Data.Sqlite;
+//#endif
+//#if (useMysql)
 using MySqlConnector;
+//#endif
+//#if (usePostgres)
 using Npgsql;
+//#endif
 using System.Net;
 using System.Text.RegularExpressions;
 using Template.Common.Models;
@@ -111,23 +119,32 @@ namespace Template.Api.Filters
             message = null;
             switch (dbUpdateEx.InnerException)
             {
+                //#if (useMssql)
                 case SqlException { Number: 2627 or 2601 } sql:
                     message = UniqueErrorFormatter(sql, dbUpdateEx.Entries);
                     return message != null;
+                //#endif
+                //#if (usePostgres)
                 case PostgresException { SqlState: "23505" } pg:
                     message = pg.Message;
                     return true;
+                //#endif
+                //#if (useSqlite)
                 case SqliteException { SqliteExtendedErrorCode: 2067 } sqlite:
                     message = sqlite.Message;
                     return true;
+                //#endif
+                //#if (useMysql)
                 case MySqlException { Number: 1062 } my:
                     message = my.Message;
                     return true;
+                //#endif
                 default:
                     return false;
             }
         }
 
+        //#if (useMssql)
         public static string? UniqueErrorFormatter(SqlException ex, IReadOnlyList<EntityEntry> entitiesNotSaved)
         {
             var message = ex.Errors[0].Message;
@@ -146,6 +163,8 @@ namespace Template.Api.Filters
             returnError = $"{entityDisplayName} with matching {matches[0].Groups[2].Value} already exists";
             return returnError;
         }
+
+        //#endif
 
         private static readonly Regex UniqueConstraintRegex =
             new Regex("IX_([a-zA-Z0-9]*)_([a-zA-Z0-9]*)'", RegexOptions.Compiled);

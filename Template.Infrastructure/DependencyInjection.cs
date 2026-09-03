@@ -34,23 +34,33 @@ public static class DependencyInjection
         {
             switch (databaseKind.ToLowerInvariant())
             {
+                //#if (useMssql)
                 case "mssql":
                     options.UseSqlServer(connectionString);
                     break;
+                //#endif
+                //#if (usePostgres)
                 case "postgres":
                     options.UseNpgsql(connectionString);
                     break;
+                //#endif
+                //#if (useSqlite)
                 case "sqlite":
                     options.UseSqlite(connectionString);
                     break;
+                //#endif
+                //#if (useMysql)
                 case "mysql":
                     options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36)));
                     break;
+                //#endif
                 default:
                     throw new InvalidOperationException(
-                        $"Unknown DatabaseKind '{databaseKind}'. Use mssql, postgres, sqlite, or mysql.");
+                        $"DatabaseKind '{databaseKind}' is not available in this service. "
+                        + "Only the provider selected when scaffolding is referenced.");
             }
         });
+
         services.AddScoped<IApplicationContext>(sp => sp.GetRequiredService<ApplicationContext>());
     }
     

@@ -28,26 +28,27 @@ namespace Template.Infrastructure.Extensions
                             continue;
                         }
 
-                        System.ComponentModel.DataAnnotations.Schema.ColumnAttribute ca = pi.GetCustomAttribute(typeof(System.ComponentModel.DataAnnotations.Schema.ColumnAttribute)) as System.ComponentModel.DataAnnotations.Schema.ColumnAttribute;
+                        var ca = pi.GetCustomAttribute<System.ComponentModel.DataAnnotations.Schema.ColumnAttribute>();
                         string name = ca?.Name ?? pi.Name;
-
-                        if (pi == null)
-                        {
-                            continue;
-                        }
 
                         if (!actualNames.Contains(name))
                         {
                             continue;
                         }
-                        object value = dr[name];
-                        Type pt = pi.DeclaringType;
+
+                        object? value = dr[name];
+
+                        // The property's own type, not the type that declares it.
+                        // DeclaringType is the entity class, so every column was
+                        // tested for nullability against the wrong type and the
+                        // Nullable<> check below could never be true.
+                        Type pt = pi.PropertyType;
                         bool nullable = pt.GetTypeInfo().IsGenericType && pt.GetGenericTypeDefinition() == typeof(Nullable<>);
                         if (value == DBNull.Value)
                         {
                             value = null;
                         }
-                        if (value == null && pt.GetTypeInfo().IsValueType && !nullable)
+                        if (value is null && pt.GetTypeInfo().IsValueType && !nullable)
                         {
                             value = Activator.CreateInstance(pt);
                         }
