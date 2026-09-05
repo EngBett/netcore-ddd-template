@@ -89,9 +89,9 @@ namespace Template.Api.Filters
 
         private void LogError(ExceptionContext context, string logKey)
         {
-            _logger.LogError(context.Exception, $"ErrorID={logKey}");
+            _logger.LogError(context.Exception, "Unhandled exception {ErrorId}", logKey);
         }
-        private void HandleInvalidModelStateException(ExceptionContext context, ApiResponse<string> apiResponse)
+        private static void HandleInvalidModelStateException(ExceptionContext context, ApiResponse<string> apiResponse)
         {
             var details = new ValidationProblemDetails(context.ModelState)
             {

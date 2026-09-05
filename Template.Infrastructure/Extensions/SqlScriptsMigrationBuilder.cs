@@ -9,10 +9,11 @@ namespace Template.Infrastructure.Extensions
         {
             var assembly = Assembly.GetExecutingAssembly();
             var sqlFiles = assembly.GetManifestResourceNames().
-                        Where(file => file.EndsWith(".sql"));
+                        Where(file => file.EndsWith(".sql", StringComparison.OrdinalIgnoreCase));
             foreach (var sqlFile in sqlFiles)
             {
-                using (Stream stream = assembly.GetManifestResourceStream(sqlFile))
+                using (Stream stream = assembly.GetManifestResourceStream(sqlFile)
+                    ?? throw new InvalidOperationException($"Embedded SQL script '{sqlFile}' could not be opened."))
                 using (StreamReader reader = new StreamReader(stream))
                 {
                     var sqlScript = reader.ReadToEnd();

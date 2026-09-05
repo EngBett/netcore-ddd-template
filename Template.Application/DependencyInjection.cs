@@ -75,7 +75,7 @@ namespace Template.Application
         {
             var port = rmq.Port > 0 ? rmq.Port : 5672;
             var vh = string.IsNullOrWhiteSpace(rmq.VirtualHost) ? "/" : rmq.VirtualHost;
-            if (!vh.StartsWith("/"))
+            if (!vh.StartsWith('/'))
                 vh = "/" + vh;
             return new UriBuilder("rabbitmq", rmq.HostName, port, vh).Uri;
         }

@@ -28,6 +28,24 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
 
 ---
 
+## Analyzer-clean scaffolding
+
+A generated service builds with **zero warnings** under strict analysis
+(`TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, `NuGetAudit`), so a
+project that turns those on starts from a clean slate instead of a backlog.
+
+Two caveats, neither of them template code, and neither visible under this
+template's own default settings:
+
+- **SQLite.** `SQLitePCLRaw.lib.e_sqlite3` (transitive, via the EF SQLite
+  provider) is covered by [GHSA-2m69-gcr7-jv3q](https://github.com/advisories/GHSA-2m69-gcr7-jv3q),
+  high severity, affecting `<= 2.1.11`. **There is no patched release**, so it
+  cannot be pinned away. A project with `NuGetAudit` enabled will see it.
+- **MySQL.** `Pomelo.EntityFrameworkCore.MySql` has **no EF Core 10 release**;
+  9.0.0 requires EF Core 9 and conflicts with this template's EF 10 pins. A
+  project with `TreatWarningsAsErrors` will see NU1608. Use `--postgres` or
+  `--mssql` on .NET 10 until Pomelo ships EF 10 support.
+
 ## What Is This Template?
 
 This template gives you a fully wired-up, opinionated starting point for building a **.NET 10 Web API** that follows:

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.ComponentModel;
 using System.Data;
 using System.Reflection;
@@ -58,6 +59,6 @@ public class ApplicationContext : DbContext, IApplicationContext
         };
 
         var scalar = await command.ExecuteScalarAsync();
-        return Convert.ToInt32(scalar);
+        return Convert.ToInt32(scalar, CultureInfo.InvariantCulture);
     }
 }

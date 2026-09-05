@@ -2,8 +2,8 @@ namespace Template.Application.Features.Todos.Models;
 
 public class TodoDto
 {
-    public string Id { get; set; }
-    public string Title { get; set; }
-    public string Description { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
     public bool IsCompleted { get; set; }
 }

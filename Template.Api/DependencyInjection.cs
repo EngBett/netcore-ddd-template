@@ -20,7 +20,7 @@ public static class DependencyInjection
         
         services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
 
-        services.AddControllers(opt => { opt.Filters.Add(typeof(GlobalExceptionFilter)); });
+        services.AddControllers(opt => { opt.Filters.Add<GlobalExceptionFilter>(); });
 
         services.AddHttpContextAccessor();
         
