@@ -33,7 +33,7 @@ namespace Template.Application.Behaviors
 
                 throw new ValidationException("Validation exception", failures);
             }
-            return await next();
+            return await next(cancellationToken);
         }
     }
 }

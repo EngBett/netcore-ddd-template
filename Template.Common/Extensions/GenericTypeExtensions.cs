@@ -19,9 +19,9 @@
             return typeName;
         }
 
-        public static string GetGenericTypeName(this object @object)
+        public static string GetGenericTypeName(this object instance)
         {
-            return @object.GetType().GetGenericTypeName();
+            return instance.GetType().GetGenericTypeName();
         }
     }
 }
