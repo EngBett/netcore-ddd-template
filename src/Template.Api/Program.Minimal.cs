@@ -14,6 +14,9 @@ builder.Configuration
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
+// OpenTelemetry, health checks and HttpClient resilience shared by every service.
+builder.AddServiceDefaults();
+
 // Add services to the container.
 builder.Services.AddApiDependencies(builder.Configuration);
 builder.Services.AddApplicationDependencies(builder.Configuration);
@@ -57,6 +60,7 @@ if (applicationOptions.EnableAutoMigration)
 }
 
 app.ConfigureMiddleware();
+app.MapDefaultEndpoints();
 
 // Minimal API endpoints
 app.MapMinimalApiEndpoints();

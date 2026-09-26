@@ -14,20 +14,40 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - **CQRS**: New features use **commands/queries** + **handlers** in `Template.Application`, validation via **FluentValidation**, optional domain events on entities in `Template.Domain`.
 - **No marker interfaces.** Commands, queries and broker contracts are plain classes. A handler is any class named `<Something>Handler`/`<Something>Consumer` with a `Handle`/`Consume` method whose first parameter is the message; dependencies are injected into the constructor or the method. Do not add `IRequest<T>`-style markers — Wolverine does not use them.
 - **Dispatch**: `IMessageBus.InvokeAsync<TResponse>(message)` runs a handler inline and returns its result (the MediatR `Send` equivalent). The response type is stated at the call site because there is no `IRequest<T>` to infer it from.
-- **In-process vs broker**: whether a message crosses RabbitMQ is decided **only** by the `BrokerContracts` list in `Template.Application/DependencyInjection.cs`. Anything absent stays on an in-process local queue. Adding a broker contract means adding it there, which wires its routing *and* its retry policy together.
+- **In-process vs broker**: whether a message crosses RabbitMQ is decided **only** by the `BrokerContracts` list in `src/Template.Application/DependencyInjection.cs`. Anything absent stays on an in-process local queue. Adding a broker contract means adding it there, which wires its routing *and* its retry policy together.
 - **Data access**: Handlers depend on **`IApplicationContext`** (not concrete `DbContext` types from Application).
 - **Validation surfacing**: `UseFluentValidation()` throws `FluentValidation.ValidationException` (unwrapped) out of `InvokeAsync`. It is mapped to a `400` in **two** places because `GlobalExceptionFilter` is an MVC filter and only covers controllers: the filter for the controllers style, and `ValidationExceptionMiddleware` for Minimal API / FastEndpoints. Both use `ValidationFailureResponse.From` so the payload is identical. The middleware rethrows anything that is not a validation failure — do not widen it to a general exception handler, and do not swap it for `UseExceptionHandler` with an empty fallback, which makes every other exception return a 404 and then throw.
 - **Domain events**: `Template.Domain` defines its own `IDomainEvent` marker and references **no** messaging package — keep it that way; that is the dependency rule. `DomainEventDispatcher.DispatchDomainEventsAsync` uses `InvokeAsync`, which dispatches on the runtime type and runs handlers inline (MediatR's `Publish` semantics). It **must** keep the `PreviewSubscriptions(...).Count == 0` guard: Wolverine throws `IndeterminateRoutesException` for a message nobody handles, so an event without a handler would otherwise fail the whole `SaveChangesAsync` rather than just skipping a side effect.
+
+## Layout
+
+- Three top-level folders: **`src/`** (the service), **`aspire/`** (`Template.AppHost`, `Template.ServiceDefaults`), **`tests/`** (`Template.Tests`). `Template.sln` and `global.json` stay at the repository root.
+- `aspire/Template.AppHost` is the **only** project allowed to reference Aspire **Hosting** packages. `aspire/Template.ServiceDefaults` is referenced by the service and must stay free of Aspire packages entirely.
+- Every path in **`.template.config/template.json`** — both `rename` keys/values and `exclude` entries — must carry the `src/` prefix. Miss one and `dotnet new` emits the wrong files: e.g. two `Program.cs` variants, which fails to compile on duplicate top-level statements. Scaffold each `--apiStyle` after touching it.
+- `src/Template.Api/Dockerfile` builds from the **repository root** as context. Its `COPY` list must name **every** project file the API references — the four siblings under `src/` *and* `aspire/Template.ServiceDefaults` — because `dotnet restore` fails on a missing `ProjectReference` target.
 
 ## Where to change behavior
 
 | Concern | Primary location |
 |--------|------------------|
-| HTTP pipeline, Swagger, JWT middleware | `Template.Api/DependencyInjection.cs`, `Program.cs` |
-| Wolverine (CQRS + broker), consumers | `Template.Application/DependencyInjection.cs` |
-| EF Core, Redis, migrations | `Template.Infrastructure/DependencyInjection.cs` |
-| Strongly typed app settings | `Template.Common/Options/*.cs` |
-| Sample appsettings | `Template.Api/appsettings.json` and provider-specific variants |
+| HTTP pipeline, Swagger, JWT middleware | `src/Template.Api/DependencyInjection.cs`, `Program.cs` |
+| Wolverine (CQRS + broker), consumers | `src/Template.Application/DependencyInjection.cs` |
+| EF Core, Redis, migrations | `src/Template.Infrastructure/DependencyInjection.cs` |
+| Strongly typed app settings | `src/Template.Common/Options/*.cs` |
+| Sample appsettings | `src/Template.Api/appsettings.json` and provider-specific variants |
+
+## Aspire
+
+- **The app host owns Aspire; the service knows nothing about it.** `Template.Api` must never reference an Aspire client package or call `AddServiceDiscovery`. The app host's only job is to translate resources into the **same explicit configuration keys the service already binds** (`DATABASE_CON`, `RedisOptions:*`, `RabbitMQOptions:*`, `ApplicationOptions:LogUrl`), using `WithEnvironment` and `__` for `:`. Anything injected must be settable in production as a plain env var with no Aspire present, and `dotnet run --project src/Template.Api` must keep working on its own.
+- Add a new dependency by adding the resource in the app host and mapping it to a config key — not by adding a client package to the service.
+- `AddProject` is called with a **path** (`"../Template.Api/Template.Api.csproj"`), not the generated `Projects.Template_Api`: `dotnet new` rewrites `Template` to the chosen project name and would turn that identifier into `Projects.Acme_Svc_Api`-style mush (`Projects.Acme.Svc_Api`), which does not compile.
+- Each database branch names its database resource after its provider (`sqlserverdb`, `postgresdb`, `mysqldb`). Aspire rejects duplicate resource names, and the template source keeps **all** branches, so a shared name makes the template's own app host throw on startup.
+- `DatabaseKind` is deliberately not injected; the provider's `appsettings.json` owns it.
+- The app host's `UserSecretsId` is listed in `template.json`'s `guids` array so each scaffolded project gets a fresh one. Aspire stores the container passwords it generates there, and they must stay in step with the data volumes.
+- To check the wiring without starting containers: `dotnet run --project aspire/Template.AppHost -- --publisher manifest --output-path manifest.json`. The manifest resolves the resource graph and every injected env var. `OTEL_EXPORTER_OTLP_ENDPOINT` is *not* in it — Aspire injects that at launch — so the OTLP path cannot be verified this way.
+- **`ServiceDefaults` omits `AddServiceDiscovery()` on purpose.** Aspire's stock version includes it; here it would make the service's HTTP targets depend on how it was launched, which is exactly what the configuration rules forbid. OpenTelemetry, health checks and `AddStandardResilienceHandler` are kept because they are portable. Do not add it back to "match the template".
+- ServiceDefaults registers the Wolverine `ActivitySource` and meter (both named `Wolverine`). Without them, message and command handling — most of what this service does — is absent from traces.
+- `MapDefaultEndpoints()` maps `/alive` (liveness, `live`-tagged checks only). `/_health` stays the readiness endpoint mapped by `Template.Api`'s own middleware; do not merge them.
 
 ## Configuration conventions
 
@@ -40,6 +60,15 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - **Validators are registered once, by `UseFluentValidation()`.** It defaults to `DiscoverAndRegisterValidators`; adding `AddValidatorsFromAssembly` as well registers each validator twice and every rule then runs twice.
 - **`WolverineFx.RuntimeCompilation`** is a required package, not an optional extra: core WolverineFx 6.x dropped the Roslyn runtime compiler and the host throws on startup without it.
 - Do **not** reintroduce a flat `"Redis"` string key; use **`RedisOptions`** in JSON.
+
+## Tests
+
+- `tests/Template.Tests` is a **Reqnroll** (Gherkin) suite on xUnit. Features in `Features/`, bindings in `Steps/`, fixtures in `Support/`.
+- `Support/TestHost.cs` boots the service's **real** `AddApplicationDependencies`. Substitute nothing beyond the two things it already does: `DisableAllExternalWolverineTransports()` and SQLite in memory. `dotnet test` must keep needing no Docker.
+- Assert **behaviour through public APIs**, not Wolverine internals. Retry scoping is covered by asserting a rejected command returns in under 250 ms, not by inspecting handler chains — apply the policy globally and that scenario fails (the run went from 0.8 s to 8 s when tried).
+- `Support/SpyHandlers.cs` adds a second handler for `TodoCreatedEvent` so dispatch is observable; it is found because `TestHost` adds the test assembly to Wolverine's discovery. Reset its counter in a `[BeforeScenario]`.
+- Do **not** add FluentAssertions: version 8 moved to a paid licence, which would undo the reason this template dropped MediatR and MassTransit. Use xUnit's `Assert`.
+- After changing anything in `Template.Application` or `Template.Infrastructure`, run `dotnet test`.
 
 ## SDK
 

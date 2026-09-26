@@ -3,12 +3,12 @@
   <metadata>
     <id>EngBett.DDD.Template</id>
     <version>2.0.0</version>
-    <description>A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, CQRS and RabbitMQ messaging both via Wolverine, Entity Framework Core, and optional Minimal APIs or FastEndpoints support.</description>
+    <description>A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, CQRS and RabbitMQ messaging both via Wolverine, a .NET Aspire app host, Entity Framework Core, and optional Minimal APIs or FastEndpoints support.</description>
     <authors>EngBett</authors>
     <license type="expression">MIT</license>
     <projectUrl>https://github.com/EngBett/netcore-ddd-template</projectUrl>
     <readme>README.md</readme>
-    <tags>dotnet template ddd clean-architecture csharp wolverine cqrs efcore fastendpoints minimal-api</tags>
+    <tags>dotnet template ddd clean-architecture csharp wolverine cqrs aspire efcore fastendpoints minimal-api</tags>
     <packageTypes>
       <packageType name="Template" />
     </packageTypes>

@@ -259,3 +259,5 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+# Reqnroll generates a .feature.cs beside each .feature at build time
+*.feature.cs
