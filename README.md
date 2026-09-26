@@ -57,8 +57,8 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **CQRS** — commands and queries are plain classes dispatched through Wolverine's `IMessageBus.InvokeAsync<TResponse>(...)`, keeping reads and writes separate. There are no marker interfaces to implement: a class named `<Something>Handler` with a `Handle` method is found by convention.
 - `**IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
-- **Messaging** — **Wolverine** is configured in `Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (queues and exchanges are declared by **`AutoProvision()`** and named by **`UseConventionalRouting()`** when the host starts).
-- **One dispatcher, two jobs** — Wolverine is both the mediator and the message bus. Which messages leave the process is decided by the `BrokerContracts` list in `Template.Application/DependencyInjection.cs`; everything else runs on an in-process local queue.
+- **Messaging** — **Wolverine** is configured in `src/Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (**`AutoProvision()`** declares the topology on start; each contract's queue is named in the `BrokerContracts` list).
+- **One dispatcher, two jobs** — Wolverine is both the mediator and the message bus. Which messages leave the process is decided by the `BrokerContracts` list in `src/Template.Application/DependencyInjection.cs`; everything else runs on an in-process local queue.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -208,7 +208,7 @@ The generated **Api** project references every EF Core provider package; at runt
 | Microsoft SQL Server | `mssql`        | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer`                                                                                                                |
 | PostgreSQL           | `postgres`     | `UseNpgsql`, Npgsql provider                                                                                                                                             |
 | SQLite               | `sqlite`       | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON`                                                                                        |
-| MySQL                | `mysql`        | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `Template.Infrastructure/DependencyInjection.cs` if you use another server version |
+| MySQL                | `mysql`        | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `src/Template.Infrastructure/DependencyInjection.cs` if you use another server version |
 
 
 **Updating an existing project:** set `DatabaseKind` and `DATABASE_CON` in configuration to switch providers; no need to re-run the template.
@@ -220,7 +220,7 @@ The generated **Api** project references every EF Core provider package; at runt
 The classic ASP.NET Core pattern. Each resource group is a controller class that inherits `BaseController`.
 
 ```
-MyApp.Api/
+src/MyApp.Api/
 └── Controllers/
     ├── BaseController.cs      # Shared logic: maps ApiResponse codes to HTTP status codes
     └── V1/
@@ -248,7 +248,7 @@ public class ProductsController : BaseController
 Endpoints are plain lambda functions registered in `MinimalApiEndpoints/MinimalApiEndpointRegistration.cs`.
 
 ```
-MyApp.Api/
+src/MyApp.Api/
 └── MinimalApiEndpoints/
     └── MinimalApiEndpointRegistration.cs  # Groups & registers all minimal endpoints
 ```
@@ -278,7 +278,7 @@ private static void MapProductEndpoints(this WebApplication app)
 Each endpoint is a self-contained class. FastEndpoints discovers them automatically at startup.
 
 ```
-MyApp.Api/
+src/MyApp.Api/
 └── Endpoints/
     └── TestEndpoint.cs   # Example: GET /api/v1/test
 ```
@@ -313,84 +313,87 @@ MyApp/
 ├── global.json                            # Pins .NET 10 SDK
 ├── MyApp.sln                              # Solution file
 │
-├── MyApp.Api/                             # HTTP entry-point project
-│   ├── Controllers/                       # [controllers style] MVC controller classes
-│   │   ├── BaseController.cs              #   Shared HTTP-response helper
-│   │   └── V1/
-│   │       └── TestController.cs          #   Example controller
-│   ├── MinimalApiEndpoints/               # [minimal style] Minimal API registrations
-│   │   └── MinimalApiEndpointRegistration.cs
-│   ├── Endpoints/                         # [fastendpoints style] FastEndpoints classes
-│   │   └── TestEndpoint.cs
-│   ├── Filters/
-│   │   ├── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses (controllers only)
-│   │   └── ValidationExceptionMiddleware.cs # Maps ValidationException → 400 for Minimal API / FastEndpoints
-│   ├── Services/
-│   │   └── CurrentUserService.cs          # Reads claims from the JWT token
-│   ├── Properties/
-│   │   └── launchSettings.json
-│   ├── appsettings.json                   # Active config (`DatabaseKind`, `DATABASE_CON`, …); chosen at template creation
-│   ├── appsettings.Database.postgres.json # Template-only: copied/renamed when using `--database postgres` / `--postgres`
-│   ├── appsettings.Database.sqlite.json   # Template-only: SQLite sample
-│   ├── appsettings.Database.mysql.json    # Template-only: MySQL sample
-│   ├── Program.cs                         # Host bootstrap; calls Api / Application / Infrastructure DI extensions
-│   ├── DependencyInjection.cs             # HTTP pipeline: controllers, Swagger, CORS, JWT wiring (calls Infrastructure for auth)
-│   └── Dockerfile                         # Multi-stage Docker build
+├── src/
+│   ├── src/MyApp.Api/                             # HTTP entry-point project
+│   │   ├── Controllers/                       # [controllers style] MVC controller classes
+│   │   │   ├── BaseController.cs              #   Shared HTTP-response helper
+│   │   │   └── V1/
+│   │   │       └── TestController.cs          #   Example controller
+│   │   ├── MinimalApiEndpoints/               # [minimal style] Minimal API registrations
+│   │   │   └── MinimalApiEndpointRegistration.cs
+│   │   ├── Endpoints/                         # [fastendpoints style] FastEndpoints classes
+│   │   │   └── TestEndpoint.cs
+│   │   ├── Filters/
+│   │   │   ├── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses (controllers only)
+│   │   │   └── ValidationExceptionMiddleware.cs # Maps ValidationException → 400 for Minimal API / FastEndpoints
+│   │   ├── Services/
+│   │   │   └── CurrentUserService.cs          # Reads claims from the JWT token
+│   │   ├── Properties/
+│   │   │   └── launchSettings.json
+│   │   ├── appsettings.json                   # Active config (`DatabaseKind`, `DATABASE_CON`, …); chosen at template creation
+│   │   ├── appsettings.Database.postgres.json # Template-only: copied/renamed when using `--database postgres` / `--postgres`
+│   │   ├── appsettings.Database.sqlite.json   # Template-only: SQLite sample
+│   │   ├── appsettings.Database.mysql.json    # Template-only: MySQL sample
+│   │   ├── Program.cs                         # Host bootstrap; calls Api / Application / Infrastructure DI extensions
+│   │   ├── DependencyInjection.cs             # HTTP pipeline: controllers, Swagger, CORS, JWT wiring (calls Infrastructure for auth)
+│   │   └── Dockerfile                         # Multi-stage Docker build
+│   │
+│   ├── src/MyApp.Application/                     # CQRS / use-case layer
+│   │   ├── Features/                          # Feature slices (vertical folders)
+│   │   │   └── Todos/                         # Example feature area
+│   │   │       ├── Commands/                  # command + its handler, for writes
+│   │   │       ├── Queries/                   # query + its handler, for reads
+│   │   │       ├── Validators/                # FluentValidation rules for requests in this feature
+│   │   │       ├── Models/                    # DTOs / read models for this feature (e.g. TodoDto)
+│   │   │       └── EventHandlers/             # <Event>Handler classes for domain events (cross-feature OK)
+│   │   ├── Interfaces/
+│   │   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
+│   │   │   └── IApplicationContext.cs         # Abstraction over EF Core (implemented by `ApplicationContext`)
+│   │   ├── Consumers/                         # Wolverine message consumers, discovered by convention (e.g. RabbitMQ)
+│   │   └── DependencyInjection.cs             # Wolverine: handler discovery, validation, RabbitMQ, broker contracts
+│   │
+│   ├── src/MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
+│   │   ├── Models/
+│   │   │   ├── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
+│   │   │   │                                  #   domain-event collection, equality by Id
+│   │   │   └── DatabaseSequence.cs            # Enum: SQL Server sequences (use [Description] for DB name)
+│   │   ├── Exceptions/
+│   │   │   └── DomainException.cs             # Throw for business-rule violations (caught by GlobalExceptionFilter)
+│   │   ├── Interfaces/
+│   │   │   └── ISpecifications.cs             # Specification pattern contract
+│   │   └── DomainEvents/                      # IDomainEvent marker + events (e.g. Todos/TodoCreatedEvent)
+│   │
+│   ├── src/MyApp.Infrastructure/                  # External-system implementations
+│   │   ├── DependencyInjection.cs             # EF Core, Redis cache, JWT authentication
+│   │   ├── DataAccess/
+│   │   │   ├── ApplicationContext.cs          # EF Core DbContext; implements IApplicationContext;
+│   │   │   │                                  #   overrides SaveChangesAsync to dispatch domain events
+│   │   │   └── Extension/
+│   │   │       └── ApiContextExtension.cs     # DbContext helpers (e.g. sequence helpers)
+│   │   └── Extensions/
+│   │       ├── DomainEventDispatcher.cs       # DispatchDomainEventsAsync — invoked from ApplicationContext.SaveChangesAsync
+│   │       ├── QueryableExtension.cs          # IQueryable helpers
+│   │       ├── SqlExtension.cs                # Raw SQL mapping helpers
+│   │       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
+│   │
+│   └── src/MyApp.Common/                          # Cross-cutting concerns shared across all layers
+│       ├── Options/
+│       │   ├── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
+│       │   ├── RedisOptions.cs                 # `RedisOptions`: connection string + cache key prefix
+│       │   ├── RabbitMQOptions.cs              # `RabbitMQOptions`: Wolverine RabbitMQ host/user/vhost
+│       │   └── MessagingOptions.cs             # `MessagingOptions`: retries, scheduled redelivery
+│       ├── Messages/                          # Contracts published/consumed via Wolverine (e.g. Todos/TodoMessage)
+│       ├── Models/
+│       │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
+│       │   ├── LogModel.cs                    # Structured log entry shape
+│       │   ├── PagedResult.cs                 # Generic pagination wrapper
+│       │   └── ResponseEnums.cs               # ResponseCodes enum: Success, Fail, NotFound, …
+│       └── Extensions/
+│           ├── EnumUtilExtension.cs           # Enum description/display helpers
+│           ├── GenericTypeExtensions.cs        # GetGenericTypeName() helper for logging type names
+│           └── QueryableExtension.cs          # Pagination and ordering helpers
 │
-├── MyApp.Application/                     # CQRS / use-case layer
-│   ├── Features/                          # Feature slices (vertical folders)
-│   │   └── Todos/                         # Example feature area
-│   │       ├── Commands/                  # command + its handler, for writes
-│   │       ├── Queries/                   # query + its handler, for reads
-│   │       ├── Validators/                # FluentValidation rules for requests in this feature
-│   │       ├── Models/                    # DTOs / read models for this feature (e.g. TodoDto)
-│   │       └── EventHandlers/             # <Event>Handler classes for domain events (cross-feature OK)
-│   ├── Interfaces/
-│   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
-│   │   └── IApplicationContext.cs         # Abstraction over EF Core (implemented by `ApplicationContext`)
-│   ├── Consumers/                         # Wolverine message consumers, discovered by convention (e.g. RabbitMQ)
-│   └── DependencyInjection.cs             # Wolverine: handler discovery, validation, RabbitMQ, broker contracts
-│
-├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
-│   ├── Models/
-│   │   ├── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
-│   │   │                                  #   domain-event collection, equality by Id
-│   │   └── DatabaseSequence.cs            # Enum: SQL Server sequences (use [Description] for DB name)
-│   ├── Exceptions/
-│   │   └── DomainException.cs             # Throw for business-rule violations (caught by GlobalExceptionFilter)
-│   ├── Interfaces/
-│   │   └── ISpecifications.cs             # Specification pattern contract
-│   └── DomainEvents/                      # IDomainEvent marker + events (e.g. Todos/TodoCreatedEvent)
-│
-├── MyApp.Infrastructure/                  # External-system implementations
-│   ├── DependencyInjection.cs             # EF Core, Redis cache, JWT authentication
-│   ├── DataAccess/
-│   │   ├── ApplicationContext.cs          # EF Core DbContext; implements IApplicationContext;
-│   │   │                                  #   overrides SaveChangesAsync to dispatch domain events
-│   │   └── Extension/
-│   │       └── ApiContextExtension.cs     # DbContext helpers (e.g. sequence helpers)
-│   └── Extensions/
-│       ├── DomainEventDispatcher.cs       # DispatchDomainEventsAsync — invoked from ApplicationContext.SaveChangesAsync
-│       ├── QueryableExtension.cs          # IQueryable helpers
-│       ├── SqlExtension.cs                # Raw SQL mapping helpers
-│       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
-│
-└── MyApp.Common/                          # Cross-cutting concerns shared across all layers
-    ├── Options/
-    │   ├── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
-    │   ├── RedisOptions.cs                 # `RedisOptions`: connection string + cache key prefix
-    │   ├── RabbitMQOptions.cs              # `RabbitMQOptions`: Wolverine RabbitMQ host/user/vhost
-    │   └── MessagingOptions.cs             # `MessagingOptions`: retries, scheduled redelivery
-    ├── Messages/                          # Contracts published/consumed via Wolverine (e.g. Todos/TodoMessage)
-    ├── Models/
-    │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
-    │   ├── LogModel.cs                    # Structured log entry shape
-    │   ├── PagedResult.cs                 # Generic pagination wrapper
-    │   └── ResponseEnums.cs               # ResponseCodes enum: Success, Fail, NotFound, …
-    └── Extensions/
-        ├── EnumUtilExtension.cs           # Enum description/display helpers
-        ├── GenericTypeExtensions.cs        # GetGenericTypeName() helper for logging type names
-        └── QueryableExtension.cs          # Pagination and ordering helpers
+└── tests/                                 # Test projects go here
 ```
 
 ---
@@ -441,7 +444,7 @@ It catches validation failures **only** and rethrows everything else, so non-val
 
 ## Configuration
 
-All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under `**ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses `**RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in `**Template.Infrastructure/DependencyInjection.cs**`. **Wolverine** reads `**RabbitMQOptions`**, `**MessagingOptions**` (retries, scheduled redelivery), and registers consumers in `**Template.Application/DependencyInjection.cs**`. The HTTP pipeline lives in `**Template.Api/DependencyInjection.cs**`—see `Program.cs`.
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under `**ApplicationOptions`** (`src/Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses `**RedisOptions`** (`src/Template.Common/Options/RedisOptions.cs`), wired in `**src/Template.Infrastructure/DependencyInjection.cs**`. **Wolverine** reads `**RabbitMQOptions`**, `**MessagingOptions**` (retries, scheduled redelivery), and registers consumers in `**src/Template.Application/DependencyInjection.cs**`. The HTTP pipeline lives in `**src/Template.Api/DependencyInjection.cs**`—see `Program.cs`.
 
 ```json
 {
@@ -506,14 +509,14 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `ApplicationOptions.EnableAutoMigration`        | When true, `Program` applies EF Core migrations on startup                                                            |
 | `ApplicationOptions.UseLoggerMiddleWare`        | Feature flag for request logging middleware (if wired)                                                                |
 | `ApplicationOptions.RequireHttpsMetadata`       | Passed to JWT bearer metadata retrieval when configured                                                               |
-| `ApplicationOptions.ShowSwagger`                | When true, Swagger UI is registered in the HTTP pipeline (`Template.Api/DependencyInjection.ConfigureMiddleware`)     |
+| `ApplicationOptions.ShowSwagger`                | When true, Swagger UI is registered in the HTTP pipeline (`src/Template.Api/DependencyInjection.ConfigureMiddleware`)     |
 
 
 ## Messaging (Wolverine + RabbitMQ)
 
 - **Configuration** is bound from `**RabbitMQOptions`**, `**MessagingOptions**`, and (for cache) `**RedisOptions**` in `Template.Common` (see `appsettings.json`).
-- **Registration** lives in `**Template.Application/DependencyInjection.cs`**: `AddWolverine` applies `RabbitMQOptions` to the RabbitMQ `**ConnectionFactory**` and `**AutoProvision()**` declares the topology on start, so a fresh broker needs no manual setup.
-- **Example consumer**: `Template.Application/Consumers/TodoMessageConsumer.cs`. Wolverine has **no `IConsumer<T>` to implement**—a class whose name ends in `Consumer` (or `Handler`) with a `Consume`/`Handle` method is discovered by convention, and the message type is taken from the first parameter. The message type is `Template.Common/Messages/Todos/TodoMessage.cs`.
+- **Registration** lives in `**src/Template.Application/DependencyInjection.cs`**: `AddWolverine` applies `RabbitMQOptions` to the RabbitMQ `**ConnectionFactory**` and `**AutoProvision()**` declares the topology on start, so a fresh broker needs no manual setup.
+- **Example consumer**: `src/Template.Application/Consumers/TodoMessageConsumer.cs`. Wolverine has **no `IConsumer<T>` to implement**—a class whose name ends in `Consumer` (or `Handler`) with a `Consume`/`Handle` method is discovered by convention, and the message type is taken from the first parameter. The message type is `src/Template.Common/Messages/Todos/TodoMessage.cs`.
 - **Publishing**: inject `**IMessageBus**` and call `**PublishAsync**` / `**SendAsync**` with `TodoMessage` (or your own contract types). This replaces MassTransit's `IPublishEndpoint` / `ISendEndpointProvider` / `IBus`.
 
 ### What crosses the broker is opt-in
@@ -521,7 +524,7 @@ All settings live in `appsettings.json`. Override them with environment variable
 Because Wolverine is also the mediator, every command, query and domain event in the Application layer is a "message" to it. Broker routing is therefore declared per contract, in one place:
 
 ```csharp
-// Template.Application/DependencyInjection.cs
+// src/Template.Application/DependencyInjection.cs
 private static readonly (Type Contract, string Queue)[] BrokerContracts =
 [
     (typeof(TodoMessage), "todo-message")
@@ -600,7 +603,7 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 ### 1 — Define a domain entity
 
 ```csharp
-// MyApp.Domain/Models/Product.cs
+// src/MyApp.Domain/Models/Product.cs
 public class Product : BaseEntity
 {
     public string Name { get; private set; }
@@ -618,7 +621,7 @@ public class Product : BaseEntity
 ### 2 — Add a command + handler
 
 ```csharp
-// MyApp.Application/Features/Products/Commands/CreateProductCommand.cs
+// src/MyApp.Application/Features/Products/Commands/CreateProductCommand.cs
 
 // No marker interface: Wolverine finds the handler by the `<Name>Handler.Handle` convention
 // and takes the message type from the first parameter.
@@ -642,7 +645,7 @@ public class CreateProductHandler
 ### 3 — Add a validator
 
 ```csharp
-// MyApp.Application/Features/Products/Validators/CreateProductValidator.cs
+// src/MyApp.Application/Features/Products/Validators/CreateProductValidator.cs
 public class CreateProductValidator : AbstractValidator<CreateProductCommand>
 {
     public CreateProductValidator()
@@ -656,7 +659,7 @@ public class CreateProductValidator : AbstractValidator<CreateProductCommand>
 ### 4 — Register the entity with EF Core
 
 ```csharp
-// MyApp.Infrastructure/DataAccess/ApplicationContext.cs
+// src/MyApp.Infrastructure/DataAccess/ApplicationContext.cs
 public DbSet<Product> Products => Set<Product>();
 ```
 

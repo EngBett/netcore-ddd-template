@@ -4,11 +4,14 @@ EXPOSE 80
 EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-WORKDIR /src
-COPY ["Template.Api/Template.Api.csproj", "Template.Api/"]
-RUN dotnet restore "Template.Api/Template.Api.csproj"
+# The build context is the repository root, where the projects now live under src/.
+# The image working directory is /build rather than /src so it does not read as a
+# sibling of the repository's own src/ folder.
+WORKDIR /build
+COPY ["src/Template.Api/Template.Api.csproj", "src/Template.Api/"]
+RUN dotnet restore "src/Template.Api/Template.Api.csproj"
 COPY . .
-WORKDIR "/src/Template.Api"
+WORKDIR "/build/src/Template.Api"
 RUN dotnet build "Template.Api.csproj" -c Release -o /app/build
 
 FROM build AS publish

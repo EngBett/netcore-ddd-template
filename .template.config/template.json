@@ -157,92 +157,92 @@
         {
           "condition": "(useControllers)",
           "rename": {
-            "Template.Api/Program.Controllers.cs": "Template.Api/Program.cs",
-            "Template.Api/Template.Api.Controllers.csproj": "Template.Api/Template.Api.csproj"
+            "src/Template.Api/Program.Controllers.cs": "src/Template.Api/Program.cs",
+            "src/Template.Api/Template.Api.Controllers.csproj": "src/Template.Api/Template.Api.csproj"
           },
           "exclude": [
-            "Template.Api/Program.cs",
-            "Template.Api/Program.Minimal.cs",
-            "Template.Api/Program.FastEndpoints.cs",
-            "Template.Api/Template.Api.Minimal.csproj",
-            "Template.Api/Template.Api.FastEndpoints.csproj",
-            "Template.Api/FastEndpoints/**",
-            "Template.Api/MinimalApiEndpoints/**"
+            "src/Template.Api/Program.cs",
+            "src/Template.Api/Program.Minimal.cs",
+            "src/Template.Api/Program.FastEndpoints.cs",
+            "src/Template.Api/Template.Api.Minimal.csproj",
+            "src/Template.Api/Template.Api.FastEndpoints.csproj",
+            "src/Template.Api/FastEndpoints/**",
+            "src/Template.Api/MinimalApiEndpoints/**"
           ]
         },
         {
           "condition": "(useMinimal)",
           "rename": {
-            "Template.Api/Program.Minimal.cs": "Template.Api/Program.cs",
-            "Template.Api/Template.Api.Minimal.csproj": "Template.Api/Template.Api.csproj"
+            "src/Template.Api/Program.Minimal.cs": "src/Template.Api/Program.cs",
+            "src/Template.Api/Template.Api.Minimal.csproj": "src/Template.Api/Template.Api.csproj"
           },
           "exclude": [
-            "Template.Api/Program.cs",
-            "Template.Api/Program.Controllers.cs",
-            "Template.Api/Program.FastEndpoints.cs",
-            "Template.Api/Template.Api.csproj",
-            "Template.Api/Template.Api.Controllers.csproj",
-            "Template.Api/Template.Api.FastEndpoints.csproj",
-            "Template.Api/FastEndpoints/**",
-            "Template.Api/Controllers/**"
+            "src/Template.Api/Program.cs",
+            "src/Template.Api/Program.Controllers.cs",
+            "src/Template.Api/Program.FastEndpoints.cs",
+            "src/Template.Api/Template.Api.csproj",
+            "src/Template.Api/Template.Api.Controllers.csproj",
+            "src/Template.Api/Template.Api.FastEndpoints.csproj",
+            "src/Template.Api/FastEndpoints/**",
+            "src/Template.Api/Controllers/**"
           ]
         },
         {
           "condition": "(useFastEndpoints)",
           "rename": {
-            "Template.Api/Program.FastEndpoints.cs": "Template.Api/Program.cs",
-            "Template.Api/Template.Api.FastEndpoints.csproj": "Template.Api/Template.Api.csproj"
+            "src/Template.Api/Program.FastEndpoints.cs": "src/Template.Api/Program.cs",
+            "src/Template.Api/Template.Api.FastEndpoints.csproj": "src/Template.Api/Template.Api.csproj"
           },
           "exclude": [
-            "Template.Api/Program.cs",
-            "Template.Api/Program.Controllers.cs",
-            "Template.Api/Program.Minimal.cs",
-            "Template.Api/Template.Api.csproj",
-            "Template.Api/Template.Api.Controllers.csproj",
-            "Template.Api/Template.Api.Minimal.csproj",
-            "Template.Api/MinimalApiEndpoints/**",
-            "Template.Api/Controllers/**"
+            "src/Template.Api/Program.cs",
+            "src/Template.Api/Program.Controllers.cs",
+            "src/Template.Api/Program.Minimal.cs",
+            "src/Template.Api/Template.Api.csproj",
+            "src/Template.Api/Template.Api.Controllers.csproj",
+            "src/Template.Api/Template.Api.Minimal.csproj",
+            "src/Template.Api/MinimalApiEndpoints/**",
+            "src/Template.Api/Controllers/**"
           ]
         },
         {
           "condition": "(useMssql)",
           "exclude": [
-            "Template.Api/appsettings.Database.postgres.json",
-            "Template.Api/appsettings.Database.sqlite.json",
-            "Template.Api/appsettings.Database.mysql.json"
+            "src/Template.Api/appsettings.Database.postgres.json",
+            "src/Template.Api/appsettings.Database.sqlite.json",
+            "src/Template.Api/appsettings.Database.mysql.json"
           ]
         },
         {
           "condition": "(usePostgres)",
           "rename": {
-            "Template.Api/appsettings.Database.postgres.json": "Template.Api/appsettings.json"
+            "src/Template.Api/appsettings.Database.postgres.json": "src/Template.Api/appsettings.json"
           },
           "exclude": [
-            "Template.Api/appsettings.json",
-            "Template.Api/appsettings.Database.sqlite.json",
-            "Template.Api/appsettings.Database.mysql.json"
+            "src/Template.Api/appsettings.json",
+            "src/Template.Api/appsettings.Database.sqlite.json",
+            "src/Template.Api/appsettings.Database.mysql.json"
           ]
         },
         {
           "condition": "(useSqlite)",
           "rename": {
-            "Template.Api/appsettings.Database.sqlite.json": "Template.Api/appsettings.json"
+            "src/Template.Api/appsettings.Database.sqlite.json": "src/Template.Api/appsettings.json"
           },
           "exclude": [
-            "Template.Api/appsettings.json",
-            "Template.Api/appsettings.Database.postgres.json",
-            "Template.Api/appsettings.Database.mysql.json"
+            "src/Template.Api/appsettings.json",
+            "src/Template.Api/appsettings.Database.postgres.json",
+            "src/Template.Api/appsettings.Database.mysql.json"
           ]
         },
         {
           "condition": "(useMysql)",
           "rename": {
-            "Template.Api/appsettings.Database.mysql.json": "Template.Api/appsettings.json"
+            "src/Template.Api/appsettings.Database.mysql.json": "src/Template.Api/appsettings.json"
           },
           "exclude": [
-            "Template.Api/appsettings.json",
-            "Template.Api/appsettings.Database.postgres.json",
-            "Template.Api/appsettings.Database.sqlite.json"
+            "src/Template.Api/appsettings.json",
+            "src/Template.Api/appsettings.Database.postgres.json",
+            "src/Template.Api/appsettings.Database.sqlite.json"
           ]
         }
       ]
