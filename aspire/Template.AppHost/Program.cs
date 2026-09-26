@@ -14,6 +14,9 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Matches the Database= value in Template.Api's appsettings.json.
+const string DatabaseName = "Template.Api";
+
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
     .WithDataVolume()
     .WithManagementPlugin();
@@ -51,15 +54,23 @@ var api = builder.AddProject("api", "../../src/Template.Api/Template.Api.csproj"
 // Each block names its database resource after its provider rather than sharing one name:
 // Aspire rejects duplicate resource names, so a shared name would make the *template's own*
 // AppHost throw on startup even though only one block ever reaches a scaffolded project.
+//
+// The database servers deliberately have no data volume. Each one is created by a script on
+// start, and a persisted volume would mean the second run tried to create a database that
+// already existed. Local database state is therefore per-run; the broker and cache below do
+// keep volumes, since nothing recreates them.
 
 //#if (useMssql)
-var sqlServer = builder.AddSqlServer("sqlserver")
-    .WithDataVolume();
+var sqlServer = builder.AddSqlServer("sqlserver");
 
-var sqlServerDatabase = sqlServer.AddDatabase("sqlserverdb", "Template.Api");
+var sqlServerDatabase = sqlServer.AddDatabase("sqlserverdb", DatabaseName)
+    // AddDatabase only puts Database= into the connection string; without a creation
+    // script the database never exists, its health check never passes, and the WaitFor
+    // below blocks the service from ever starting.
+    .WithCreationScript($"IF DB_ID('{DatabaseName}') IS NULL CREATE DATABASE [{DatabaseName}];");
 
 api.WithEnvironment("DATABASE_CON", sqlServerDatabase.Resource.ConnectionStringExpression)
-   .WaitFor(sqlServerDatabase);
+   .WaitFor(sqlServer);
 //#endif
 
 //#if (useSqlite)
@@ -68,23 +79,26 @@ api.WithEnvironment("DATABASE_CON", sqlServerDatabase.Resource.ConnectionStringE
 //#endif
 
 //#if (usePostgres)
-var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume();
+var postgres = builder.AddPostgres("postgres");
 
-var postgresDatabase = postgres.AddDatabase("postgresdb", "Template.Api");
+var postgresDatabase = postgres.AddDatabase("postgresdb", DatabaseName)
+    // See the note on the SQL Server script above. Postgres needs the quotes because the
+    // name contains a dot.
+    .WithCreationScript($"CREATE DATABASE \"{DatabaseName}\";");
 
 api.WithEnvironment("DATABASE_CON", postgresDatabase.Resource.ConnectionStringExpression)
-   .WaitFor(postgresDatabase);
+   .WaitFor(postgres);
 //#endif
 
 //#if (useMysql)
-var mysql = builder.AddMySql("mysql")
-    .WithDataVolume();
+var mysql = builder.AddMySql("mysql");
 
-var mysqlDatabase = mysql.AddDatabase("mysqldb", "Template.Api");
+var mysqlDatabase = mysql.AddDatabase("mysqldb", DatabaseName)
+    // See the note on the SQL Server script above.
+    .WithCreationScript($"CREATE DATABASE IF NOT EXISTS `{DatabaseName}`;");
 
 api.WithEnvironment("DATABASE_CON", mysqlDatabase.Resource.ConnectionStringExpression)
-   .WaitFor(mysqlDatabase);
+   .WaitFor(mysql);
 //#endif
 
 builder.Build().Run();

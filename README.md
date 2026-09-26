@@ -693,6 +693,9 @@ dotnet run --project aspire/MyApp.AppHost -- --publisher manifest --output-path 
 
 ### Notes and limits
 
+- **SQL Server does not run on Apple Silicon.** `mcr.microsoft.com/mssql/server` ships `linux/amd64` only; under emulation on an ARM Mac the container dies with exit 139 (SIGSEGV), and because the service waits for its database it then never starts. On an ARM Mac, scaffold with `--postgres`, `--mysql` or `--sqlite`. This is an image limitation, not a template one.
+- **`ASPNETCORE_ENVIRONMENT` must be `Development` locally.** `ApplicationOptions.EnableAutoMigration` defaults to `true`, and `Program.cs` refuses to auto-migrate outside Development. Aspire launches the service through its launch profile, so `launchSettings.json` sets `Development` for exactly this reason — changing it to something else makes the service throw on startup.
+
 - **Add resources, not clients.** To add a dependency, add it in the AppHost and map it to a config key with `WithEnvironment`. Do not add Aspire client packages or `AddServiceDiscovery` to the service — that is what keeps production configuration transparent.
 - **`DatabaseKind` is not injected.** The `appsettings.json` that ships with the provider you chose already sets it, and it stays the single source of truth.
 - **SQLite has no resource.** It is a file, not a service, so the AppHost injects no connection string and the API keeps the `DATABASE_CON` from its own `appsettings.json`.

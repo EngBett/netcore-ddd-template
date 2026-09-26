@@ -61,6 +61,13 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - **`WolverineFx.RuntimeCompilation`** is a required package, not an optional extra: core WolverineFx 6.x dropped the Roslyn runtime compiler and the host throws on startup without it.
 - Do **not** reintroduce a flat `"Redis"` string key; use **`RedisOptions`** in JSON.
 
+## Runtime gotchas found by actually running it
+
+- **`launchSettings.json` must keep `ASPNETCORE_ENVIRONMENT=Development`.** It previously said `Local`, which made `IsDevelopment()` false, so `Program.cs` threw `EnableAutoMigration is true outside Development` on every start — including under Aspire, which launches the service via its launch profile and therefore never got the service up. It also silently disabled the detailed-error branch in `GlobalExceptionFilter`.
+- **SQL Server cannot run on Apple Silicon.** The image is `linux/amd64` only and exits 139 under emulation. The template default is still `mssql`; on ARM use another provider.
+- **`AddDatabase` does not create the database.** It only appends `Database=` to the connection string. Each provider block therefore carries a `WithCreationScript`, and the service waits on the database **server** rather than the database resource — waiting on the database resource blocks forever when its health check cannot connect.
+- **The database servers have no data volume on purpose.** A creation script plus a persisted volume means the second run tries to create a database that already exists.
+
 ## Tests
 
 - `tests/Template.Tests` is a **Reqnroll** (Gherkin) suite on xUnit. Features in `Features/`, bindings in `Steps/`, fixtures in `Support/`.
