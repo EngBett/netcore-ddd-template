@@ -8,6 +8,12 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsAspireHost>true</IsAspireHost>
+        <!-- ASPIRE010 advertises the Aspire CLI bundle. This AppHost is run with plain
+             `dotnet run`, which needs no bundle and is what the README documents, so the
+             advice does not apply. Setting AspireUseCliBundle=true instead makes
+             `dotnet run` delegate to the CLI, which then has to resolve and launch the
+             bundle before the host starts. -->
+        <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
         <!-- Aspire persists the credentials it generates for containers in user secrets.
              Without a stable id they would be regenerated on every run and would no
              longer match the passwords already baked into the data volumes below. -->

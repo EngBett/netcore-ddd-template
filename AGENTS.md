@@ -23,6 +23,7 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 
 - Three top-level folders: **`src/`** (the service), **`aspire/`** (`Template.AppHost`, `Template.ServiceDefaults`), **`tests/`** (`Template.Tests`). `Template.sln` and `global.json` stay at the repository root.
 - `aspire/Template.AppHost` is the **only** project allowed to reference Aspire **Hosting** packages. `aspire/Template.ServiceDefaults` is referenced by the service and must stay free of Aspire packages entirely.
+- Scaffolded projects **do** get a `.gitignore` — the repository's own file is shipped as-is, so keep it fit for a generated service (it already ignores Reqnroll's generated `*.feature.cs`). It is deliberately not in `template.json`'s exclude list.
 - Every path in **`.template.config/template.json`** — both `rename` keys/values and `exclude` entries — must carry the `src/` prefix. Miss one and `dotnet new` emits the wrong files: e.g. two `Program.cs` variants, which fails to compile on duplicate top-level statements. Scaffold each `--apiStyle` after touching it.
 - `src/Template.Api/Dockerfile` builds from the **repository root** as context. Its `COPY` list must name **every** project file the API references — the four siblings under `src/` *and* `aspire/Template.ServiceDefaults` — because `dotnet restore` fails on a missing `ProjectReference` target.
 
@@ -82,6 +83,12 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - `.github/workflows/ci.yml` runs three jobs: build + `dotnet test`; a 12-way `apiStyle` x `database` matrix that scaffolds, asserts exactly one variant of each conditional file survived, builds, runs the scaffolded tests and resolves the Aspire manifest; and a job asserting every database selection path (choice and boolean shortcut) resolves to one provider.
 - **Touching `.template.config/template.json` means the matrix job is the thing that will catch you.** It needs no Docker — the Aspire check uses manifest generation, and the test suite uses SQLite in memory.
 - CI resolves from nuget.org only; the repository has no `NuGet.config`. Do not add one pointing at a private feed without adding credentials to the workflow.
+
+## Package pins
+
+- `SQLitePCLRaw.lib.e_sqlite3` and `Microsoft.OpenApi` are referenced **directly** purely to lift them above the versions EF Core Sqlite and Swashbuckle resolve transitively, which carry GHSA-2m69-gcr7-jv3q and GHSA-v5pm-xwqc-g5wc. They are not used in code. Do not remove them without re-running `dotnet list package --vulnerable --include-transitive`, and keep the SQLite pin inside the `useSqlite` conditional so other providers do not carry it.
+- `Microsoft.OpenApi` stays on **2.x**. Swashbuckle 10.x expects that major version; 3.x is available but untested here.
+- Pomelo (MySQL) is the one provider knowingly outside its supported range — see the note in the README's provider table.
 
 ## SDK
 

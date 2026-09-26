@@ -19,6 +19,8 @@
              scaffolded with, so it needs its own reference rather than relying on
              whichever provider Infrastructure pulled in. -->
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+        <!-- See the note in Template.Infrastructure: GHSA-2m69-gcr7-jv3q. -->
+        <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     </ItemGroup>
 
