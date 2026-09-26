@@ -44,6 +44,11 @@ public static class DependencyInjection
 
     public static void ConfigureMiddleware(this WebApplication app)
     {
+        // GlobalExceptionFilter only runs for controllers, so the Minimal API and
+        // FastEndpoints styles need this to turn a validation failure into a 400 rather than
+        // a bare 500. First in the pipeline so it wraps the endpoints of every style.
+        app.UseValidationExceptionHandling();
+
         app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         app.UseHealthChecks("/_health");
         var appsettings = app.Configuration.GetSection(nameof(ApplicationOptions)).Get<ApplicationOptions>();

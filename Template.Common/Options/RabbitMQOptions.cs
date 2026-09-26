@@ -1,7 +1,7 @@
 namespace Template.Common.Options;
 
 /// <summary>
-/// Binds the <c>RabbitMQOptions</c> section in configuration (used by MassTransit).
+/// Binds the <c>RabbitMQOptions</c> section in configuration (used by Wolverine).
 /// </summary>
 public class RabbitMQOptions
 {

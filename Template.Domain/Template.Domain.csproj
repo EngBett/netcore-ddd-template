@@ -7,7 +7,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="MediatR" Version="12.5.0" />
         <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.7" />
     </ItemGroup>
 

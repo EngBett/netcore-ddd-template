@@ -10,7 +10,7 @@
   "identity": "EngBett.DDD.Template",
   "name": "DDD .NET Template",
   "shortName": "ddd-template",
-  "description": "A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), and optional Minimal APIs or FastEndpoints support.",
+  "description": "A .NET 10 Domain-Driven Design (DDD) template with Clean Architecture, CQRS and RabbitMQ messaging both via Wolverine, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), and optional Minimal APIs or FastEndpoints support.",
   "tags": {
     "language": "C#",
     "type": "solution"
