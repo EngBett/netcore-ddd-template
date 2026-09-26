@@ -1,6 +1,8 @@
 # DDD .NET Template
 
-A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS via MediatR, Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), **MassTransit** with **RabbitMQ** (example consumer), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+
+> **Licensing note.** This template uses **Wolverine** for both in-process CQRS and broker messaging, in place of MediatR and MassTransit. Both of those moved to commercial licences; WolverineFx is MIT, so a service scaffolded from this template carries no per-seat licence obligation for its dispatcher or its message bus — and there is one library to learn instead of two.
 
 ## Table of Contents
 
@@ -21,7 +23,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
   - [Template.Common](#templatecommon)
 - [Data Flow (Request Lifecycle)](#data-flow-request-lifecycle)
 - [Configuration](#configuration)
-- [Messaging (MassTransit + RabbitMQ)](#messaging-masstransit--rabbitmq)
+- [Messaging (Wolverine + RabbitMQ)](#messaging-wolverine--rabbitmq)
 - [Running Locally](#running-locally)
 - [Adding Features](#adding-features)
 - [Publishing the Template to NuGet](#publishing-the-template-to-nuget)
@@ -52,10 +54,11 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 
 - **Domain-Driven Design (DDD)** — your business logic lives in a rich `Domain` layer with domain events, not in controllers or services.
 - **Clean Architecture** — dependencies always point inward: `Api` → `Application` → `Domain`; `Infrastructure` implements interfaces defined in `Application`.
-- **CQRS** — commands and queries are first-class types dispatched through MediatR, keeping reads and writes separate.
+- **CQRS** — commands and queries are plain classes dispatched through Wolverine's `IMessageBus.InvokeAsync<TResponse>(...)`, keeping reads and writes separate. There are no marker interfaces to implement: a class named `<Something>Handler` with a `Handle` method is found by convention.
 - `**IApplicationContext`** — handlers use a single EF Core context abstraction (`Set<T>()`, `SaveChangesAsync`, …) so the Application layer does not depend on a generic repository or separate unit-of-work type; Infrastructure supplies one `DbContext` implementation.
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
-- **Messaging** — **MassTransit** is configured in `Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (queues/exchanges are created by MassTransit’s **topologies** when the bus starts).
+- **Messaging** — **Wolverine** is configured in `Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (queues and exchanges are declared by **`AutoProvision()`** and named by **`UseConventionalRouting()`** when the host starts).
+- **One dispatcher, two jobs** — Wolverine is both the mediator and the message bus. Which messages leave the process is decided by the `BrokerContracts` list in `Template.Application/DependencyInjection.cs`; everything else runs on an in-process local queue.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -68,7 +71,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 │              Template.Api               │  ← HTTP layer: receives requests,
 │   (Controllers / Minimal / FastEndpts)  │    returns responses
 └───────────────┬─────────────────────────┘
-                │ dispatches via MediatR
+                │ dispatches via Wolverine
 ┌───────────────▼─────────────────────────┐
 │          Template.Application           │  ← CQRS handlers, validation,
 │     Commands · Queries · Behaviors      │    pipeline behaviours
@@ -102,8 +105,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 | **.NET 10**                  | Runtime and SDK                                                            |
 | **ASP.NET Core 10**          | Web host, middleware pipeline                                              |
 | **Entity Framework Core 10** | ORM (SQL Server, PostgreSQL, SQLite, or MySQL) and code-first migrations   |
-| **MediatR 12**               | In-process messaging for CQRS (commands, queries, domain events)           |
-| **FluentValidation 12**      | Request validation wired into the MediatR pipeline                         |
+| **FluentValidation 12**      | Request validation run as Wolverine middleware (`UseFluentValidation`)     |
 | **Serilog**                  | Structured logging to console and Seq                                      |
 | **Swashbuckle / OpenAPI**    | Swagger UI for API exploration                                             |
 | **JWT Bearer**               | Authentication via `Microsoft.AspNetCore.Authentication.JwtBearer`         |
@@ -111,7 +113,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 | **Prometheus**               | Metrics scraping endpoint at `/metrics`                                    |
 | **FastEndpoints 8**          | *(optional)* Slim, high-performance endpoint model                         |
 | **IdentityModel**            | JWT claim helpers                                                          |
-| **MassTransit 8**            | Asynchronous messaging; **RabbitMQ** transport with configurable consumers |
+| **Wolverine 6**              | In-process CQRS *and* **RabbitMQ** messaging; MIT                          |
 
 
 ---
@@ -232,12 +234,12 @@ Add a new controller:
 [Route("api/v1/[controller]")]
 public class ProductsController : BaseController
 {
-    private readonly IMediator _mediator;
-    public ProductsController(IMediator mediator) => _mediator = mediator;
+    private readonly IMessageBus _bus;
+    public ProductsController(IMessageBus bus) => _bus = bus;
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] GetProductsQuery query)
-        => CustomResponse(await _mediator.Send(query));
+        => CustomResponse(await _bus.InvokeAsync<ApiResponse<List<ProductDto>>>(query));
 }
 ```
 
@@ -266,8 +268,8 @@ public static WebApplication MapMinimalApiEndpoints(this WebApplication app)
 private static void MapProductEndpoints(this WebApplication app)
 {
     var group = app.MapGroup("/api/v1/products").RequireAuthorization();
-    group.MapGet("/", async (IMediator mediator) =>
-        Results.Ok(await mediator.Send(new GetProductsQuery())));
+    group.MapGet("/", async (IMessageBus bus) =>
+        Results.Ok(await bus.InvokeAsync<ApiResponse<List<ProductDto>>>(new GetProductsQuery())));
 }
 ```
 
@@ -286,8 +288,8 @@ Add a new endpoint:
 ```csharp
 public class GetProductsEndpoint : EndpointWithoutRequest<ApiResponse<List<ProductDto>>>
 {
-    private readonly IMediator _mediator;
-    public GetProductsEndpoint(IMediator mediator) => _mediator = mediator;
+    private readonly IMessageBus _bus;
+    public GetProductsEndpoint(IMessageBus bus) => _bus = bus;
 
     public override void Configure()
     {
@@ -296,7 +298,7 @@ public class GetProductsEndpoint : EndpointWithoutRequest<ApiResponse<List<Produ
     }
 
     public override async Task HandleAsync(CancellationToken ct)
-        => await Send.OkAsync(await _mediator.Send(new GetProductsQuery()), ct);
+        => await Send.OkAsync(await _bus.InvokeAsync<ApiResponse<List<ProductDto>>>(new GetProductsQuery()), ct);
 }
 ```
 
@@ -321,7 +323,8 @@ MyApp/
 │   ├── Endpoints/                         # [fastendpoints style] FastEndpoints classes
 │   │   └── TestEndpoint.cs
 │   ├── Filters/
-│   │   └── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses
+│   │   ├── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses (controllers only)
+│   │   └── ValidationExceptionMiddleware.cs # Maps ValidationException → 400 for Minimal API / FastEndpoints
 │   ├── Services/
 │   │   └── CurrentUserService.cs          # Reads claims from the JWT token
 │   ├── Properties/
@@ -335,20 +338,18 @@ MyApp/
 │   └── Dockerfile                         # Multi-stage Docker build
 │
 ├── MyApp.Application/                     # CQRS / use-case layer
-│   ├── Behaviors/
-│   │   └── ValidatorBehavior.cs           # MediatR pipeline: runs FluentValidation before handler
 │   ├── Features/                          # Feature slices (vertical folders)
 │   │   └── Todos/                         # Example feature area
-│   │       ├── Commands/                  # IRequest handlers for writes
-│   │       ├── Queries/                   # IRequest handlers for reads
+│   │       ├── Commands/                  # command + its handler, for writes
+│   │       ├── Queries/                   # query + its handler, for reads
 │   │       ├── Validators/                # FluentValidation rules for requests in this feature
 │   │       ├── Models/                    # DTOs / read models for this feature (e.g. TodoDto)
-│   │       └── EventHandlers/             # INotificationHandler<T> for domain events (cross-feature OK)
+│   │       └── EventHandlers/             # <Event>Handler classes for domain events (cross-feature OK)
 │   ├── Interfaces/
 │   │   ├── ICurrentUserService.cs         # Abstraction for reading the current user
 │   │   └── IApplicationContext.cs         # Abstraction over EF Core (implemented by `ApplicationContext`)
-│   ├── Consumers/                         # MassTransit `IConsumer<T>` handlers (e.g. RabbitMQ)
-│   └── DependencyInjection.cs             # MediatR, FluentValidation, MassTransit + RabbitMQ (consumers)
+│   ├── Consumers/                         # Wolverine message consumers, discovered by convention (e.g. RabbitMQ)
+│   └── DependencyInjection.cs             # Wolverine: handler discovery, validation, RabbitMQ, broker contracts
 │
 ├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
 │   ├── Models/
@@ -359,7 +360,7 @@ MyApp/
 │   │   └── DomainException.cs             # Throw for business-rule violations (caught by GlobalExceptionFilter)
 │   ├── Interfaces/
 │   │   └── ISpecifications.cs             # Specification pattern contract
-│   └── DomainEvents/                      # INotification domain events (e.g. Todos/TodoCreatedEvent)
+│   └── DomainEvents/                      # IDomainEvent marker + events (e.g. Todos/TodoCreatedEvent)
 │
 ├── MyApp.Infrastructure/                  # External-system implementations
 │   ├── DependencyInjection.cs             # EF Core, Redis cache, JWT authentication
@@ -369,7 +370,7 @@ MyApp/
 │   │   └── Extension/
 │   │       └── ApiContextExtension.cs     # DbContext helpers (e.g. sequence helpers)
 │   └── Extensions/
-│       ├── MediatorExtension.cs           # DispatchDomainEventsAsync — invoked from ApplicationContext.SaveChangesAsync
+│       ├── DomainEventDispatcher.cs       # DispatchDomainEventsAsync — invoked from ApplicationContext.SaveChangesAsync
 │       ├── QueryableExtension.cs          # IQueryable helpers
 │       ├── SqlExtension.cs                # Raw SQL mapping helpers
 │       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
@@ -378,9 +379,9 @@ MyApp/
     ├── Options/
     │   ├── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
     │   ├── RedisOptions.cs                 # `RedisOptions`: connection string + cache key prefix
-    │   ├── RabbitMQOptions.cs              # `RabbitMQOptions`: MassTransit RabbitMQ host/user/vhost
-    │   └── MassTransitOptions.cs           # `MassTransitOptions`: retries, redelivery, in-memory outbox
-    ├── Messages/                          # Contracts published/consumed via MassTransit (e.g. Todos/TodoMessage)
+    │   ├── RabbitMQOptions.cs              # `RabbitMQOptions`: Wolverine RabbitMQ host/user/vhost
+    │   └── MessagingOptions.cs             # `MessagingOptions`: retries, scheduled redelivery
+    ├── Messages/                          # Contracts published/consumed via Wolverine (e.g. Todos/TodoMessage)
     ├── Models/
     │   ├── ApiResponseModel.cs            # ApiResponse<T> and ResponseMessage helpers
     │   ├── LogModel.cs                    # Structured log entry shape
@@ -388,7 +389,7 @@ MyApp/
     │   └── ResponseEnums.cs               # ResponseCodes enum: Success, Fail, NotFound, …
     └── Extensions/
         ├── EnumUtilExtension.cs           # Enum description/display helpers
-        ├── GenericTypeExtensions.cs        # GetGenericTypeName() used by ValidatorBehavior
+        ├── GenericTypeExtensions.cs        # GetGenericTypeName() helper for logging type names
         └── QueryableExtension.cs          # Pagination and ordering helpers
 ```
 
@@ -403,19 +404,19 @@ HTTP Request
     │
     ▼
 [Template.Api] Controller / Minimal endpoint / FastEndpoints endpoint
-    │  Injects IMediator, sends a Command or Query
+    │  Injects IMessageBus, calls InvokeAsync<TResponse>(command or query)
     ▼
-[Template.Application] MediatR Pipeline
-    │  1. ValidatorBehavior — runs FluentValidation; throws ValidationException on failure
+[Template.Application] Wolverine handler chain
+    │  1. FluentValidation middleware — throws ValidationException on failure
     │  2. YourCommandHandler / YourQueryHandler — executes the use case
     │     ├── Uses IApplicationContext (Set<T>(), Add, queries, …) for persistence
     │     └── Calls IApplicationContext.SaveChangesAsync() to commit
     ▼
 [Template.Infrastructure] ApplicationContext.SaveChangesAsync()
     │  1. EF Core persists changes to SQL Server
-    │  2. MediatorExtension.DispatchDomainEventsAsync() publishes any domain events
+    │  2. DomainEventDispatcher.DispatchDomainEventsAsync() invokes any domain events
     ▼
-[Template.Application] Domain event handlers (INotificationHandler<TEvent>)
+[Template.Application] Domain event handlers (plain <Event>Handler classes)
     │
     ▼
 [Template.Api] Handler returns result → ApiResponse<T> → HTTP response
@@ -423,15 +424,24 @@ HTTP Request
 
 **Error handling**: unhandled exceptions bubble up to `GlobalExceptionFilter`, which maps:
 
+- `ValidationException` → `400 Bad Request`, with `message` set to the first failure and `errors` listing them all
 - `DomainException` → `400 Bad Request`
 - EF Core **unique-constraint** violations (SQL Server, PostgreSQL, SQLite, MySQL) → `400 Bad Request` with a human-readable or provider message
 - Any other exception → `500 Internal Server Error` (with full detail in Development)
+
+`GlobalExceptionFilter` is an MVC `IExceptionFilter`, so it only runs for the **controllers** style. Because validation now runs as Wolverine middleware and throws, the Minimal API and FastEndpoints styles need their own mapping or they would return a bare `500` for a bad request. `ValidationExceptionMiddleware` (registered first in `ConfigureMiddleware`) covers them, producing the identical payload:
+
+```json
+{ "result": null, "message": "'User Id' must not be empty.", "errors": ["'User Id' must not be empty."] }
+```
+
+It catches validation failures **only** and rethrows everything else, so non-validation exceptions keep the behaviour they had before. Note that Wolverine also logs each validation failure at `Error` level; tune that with `opts.Policies.MessageExecutionLogLevel(...)` if client errors are noisy in your logs.
 
 ---
 
 ## Configuration
 
-All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under `**ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses `**RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in `**Template.Infrastructure/DependencyInjection.cs**`. **MassTransit** reads `**RabbitMQOptions`**, `**MassTransitOptions**` (retries, delayed redelivery, in-memory outbox), and registers consumers in `**Template.Application/DependencyInjection.cs**`. The HTTP pipeline lives in `**Template.Api/DependencyInjection.cs**`—see `Program.cs`.
+All settings live in `appsettings.json`. Override them with environment variables or an `appsettings.{Environment}.json` file. Host, JWT, logging, and Serilog-related settings are grouped under `**ApplicationOptions`** (`Template.Common/Options/ApplicationOptions.cs`). **Distributed cache** uses `**RedisOptions`** (`Template.Common/Options/RedisOptions.cs`), wired in `**Template.Infrastructure/DependencyInjection.cs**`. **Wolverine** reads `**RabbitMQOptions`**, `**MessagingOptions**` (retries, scheduled redelivery), and registers consumers in `**Template.Application/DependencyInjection.cs**`. The HTTP pipeline lives in `**Template.Api/DependencyInjection.cs**`—see `Program.cs`.
 
 ```json
 {
@@ -441,8 +451,7 @@ All settings live in `appsettings.json`. Override them with environment variable
     "ConnectionString": "localhost:6379",
     "InstanceName": "MyApp.Api"
   },
-  "MassTransitOptions": {
-    "EnableInMemoryOutbox": true,
+  "MessagingOptions": {
     "RetryIntervalsMilliseconds": [ 100, 500, 1000 ],
     "EnableDelayedRedelivery": true,
     "RedeliveryIntervalsSeconds": [ 1, 5, 15 ]
@@ -482,11 +491,10 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `DATABASE_CON`                                  | Database connection string for the selected provider                                                                  |
 | `RedisOptions.ConnectionString`                 | StackExchange.Redis connection (e.g. `host:port` or full connection string)                                           |
 | `RedisOptions.InstanceName`                     | Prefix for cache keys when using `IDistributedCache`                                                                  |
-| `MassTransitOptions.EnableInMemoryOutbox`       | When true, MassTransit uses the in-memory outbox for send/publish with consumer retries                               |
-| `MassTransitOptions.RetryIntervalsMilliseconds` | Immediate consumer retry delays (ms); omit or use `[]` to skip `UseMessageRetry`                                      |
-| `MassTransitOptions.EnableDelayedRedelivery`    | When true, schedules extra delayed redelivery after retries (RabbitMQ transport)                                      |
-| `MassTransitOptions.RedeliveryIntervalsSeconds` | Delayed redelivery schedule (seconds) when enabled                                                                    |
-| `RabbitMQOptions.HostName`                      | RabbitMQ server hostname (MassTransit)                                                                                |
+| `MessagingOptions.RetryIntervalsMilliseconds`   | Immediate in-process retry delays (ms); omit or use `[]` to skip immediate retries                                    |
+| `MessagingOptions.EnableDelayedRedelivery`      | When true, messages that exhaust the immediate retries are rescheduled for later attempts                              |
+| `MessagingOptions.RedeliveryIntervalsSeconds`   | Scheduled retry schedule (seconds) when enabled                                                                       |
+| `RabbitMQOptions.HostName`                      | RabbitMQ server hostname (Wolverine)                                                                                  |
 | `RabbitMQOptions.Port`                          | AMQP port (default **5672**)                                                                                          |
 | `RabbitMQOptions.UserName` / `Password`         | Broker credentials                                                                                                    |
 | `RabbitMQOptions.VirtualHost`                   | Virtual host (e.g. `**/`** for the default vhost)                                                                     |
@@ -501,13 +509,43 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `ApplicationOptions.ShowSwagger`                | When true, Swagger UI is registered in the HTTP pipeline (`Template.Api/DependencyInjection.ConfigureMiddleware`)     |
 
 
-## Messaging (MassTransit + RabbitMQ)
+## Messaging (Wolverine + RabbitMQ)
 
-- **Configuration** is bound from `**RabbitMQOptions`**, `**MassTransitOptions**`, and (for cache) `**RedisOptions**` in `Template.Common` (see `appsettings.json`).
-- **Registration** lives in `**Template.Application/DependencyInjection.cs`**: `AddMassTransit` uses the **RabbitMQ** transport, optional `**AddConfigureEndpointsCallback`** + `**UseInMemoryOutbox(registrationContext)**` when `MassTransitOptions.EnableInMemoryOutbox` is true, `AddConsumer<T>()` registers consumers, `**UseMessageRetry**` / `**UseDelayedRedelivery**` apply resilience from `MassTransitOptions`, and `**ConfigureEndpoints**` creates receive endpoints (queue names follow MassTransit’s default **kebab-case** endpoint naming, e.g. for `TodoMessageConsumer`).
-- **Example consumer**: `Template.Application/Consumers/TodoMessageConsumer.cs` implements `IConsumer<TodoMessage>`; the message type is `Template.Common/Messages/Todos/TodoMessage.cs`.
-- **Publishing** from the API or application layer: inject `**IPublishEndpoint`** or `**ISendEndpointProvider**` (or the MassTransit `**IBus**`) and publish/send `TodoMessage` (or your own contract types) so the consumer can process them—add any new message types and consumers in the same way.
-- The API host starts the **MassTransit bus** as a hosted service when the process starts; ensure RabbitMQ is reachable or startup will fail.
+- **Configuration** is bound from `**RabbitMQOptions`**, `**MessagingOptions**`, and (for cache) `**RedisOptions**` in `Template.Common` (see `appsettings.json`).
+- **Registration** lives in `**Template.Application/DependencyInjection.cs`**: `AddWolverine` applies `RabbitMQOptions` to the RabbitMQ `**ConnectionFactory**` and `**AutoProvision()**` declares the topology on start, so a fresh broker needs no manual setup.
+- **Example consumer**: `Template.Application/Consumers/TodoMessageConsumer.cs`. Wolverine has **no `IConsumer<T>` to implement**—a class whose name ends in `Consumer` (or `Handler`) with a `Consume`/`Handle` method is discovered by convention, and the message type is taken from the first parameter. The message type is `Template.Common/Messages/Todos/TodoMessage.cs`.
+- **Publishing**: inject `**IMessageBus**` and call `**PublishAsync**` / `**SendAsync**` with `TodoMessage` (or your own contract types). This replaces MassTransit's `IPublishEndpoint` / `ISendEndpointProvider` / `IBus`.
+
+### What crosses the broker is opt-in
+
+Because Wolverine is also the mediator, every command, query and domain event in the Application layer is a "message" to it. Broker routing is therefore declared per contract, in one place:
+
+```csharp
+// Template.Application/DependencyInjection.cs
+private static readonly (Type Contract, string Queue)[] BrokerContracts =
+[
+    (typeof(TodoMessage), "todo-message")
+];
+```
+
+That single list drives both the RabbitMQ routing and the retry policy. **A message type not listed here stays on an in-process local queue**—which is exactly what you want for CQRS requests and domain events. To add a broker contract, add it to this list.
+
+`**UseConventionalRouting()**` is deliberately *not* used. It looks like the equivalent of MassTransit's `ConfigureEndpoints`, but when a message type has a local handler—as any contract whose consumer lives in the solution does—Wolverine resolves it to the local queue in preference to the broker, and published messages quietly never leave the process.
+
+### Retries apply to broker messages only
+
+`MessagingOptions` becomes one chained rule—`**OnAnyException().RetryWithCooldown(…)**` for immediate retries, then `**.Then.ScheduleRetry(…)**` for a slower scheduled round—applied by `BrokerResiliencePolicy` to the handler chains of the broker contracts.
+
+It is applied there rather than through `opts.Policies` because a global policy also governs `InvokeAsync`. With the template's default intervals, a command that fails validation would be retried at 100 ms, 500 ms and 1 s, then rescheduled, so the caller waits **seconds** for what should be an immediate `400`. MassTransit's retries lived on receive endpoints and never touched MediatR; scoping the rules to broker contracts keeps that separation.
+
+### Two Wolverine settings this template must keep
+
+- **`WolverineFx.RuntimeCompilation` is a required package, not an optional extra.** Core WolverineFx 6.x no longer ships the Roslyn runtime compiler, and the host throws on startup without it. The alternative is pre-generating handler code (`codegen write`) plus `TypeLoadMode.Static`, which suits a tuned deployment more than a template default.
+- **`ServiceLocationPolicy.AlwaysAllowed`.** Wolverine's generated handler code constructs dependencies inline and by default refuses to fall back on the container. Infrastructure registers `IApplicationContext` as an alias so one `DbContext` serves both the interface and the concrete type, and Wolverine cannot see through that lambda—so every handler taking `IApplicationContext` would otherwise fail with `InvalidServiceLocationException`. Registering the interface against the concrete type instead would hand out a *second* `DbContext` per scope, with its own change tracker: a quieter and worse bug than one container lookup per invocation.
+
+The API host starts **Wolverine** as a hosted service when the process starts; ensure RabbitMQ is reachable or startup will fail.
+
+> **Migrating from the MediatR + MassTransit version of this template?** `IMediator` becomes `IMessageBus`, and `Send(x)` becomes `InvokeAsync<TResponse>(x)`—the response type is now stated at the call site. Drop `IRequest<T>` / `IRequestHandler<,>` / `INotificationHandler<>` from your messages and handlers; keep the `<Name>Handler.Handle` naming and they are found by convention. `ValidatorBehavior` is replaced by `UseFluentValidation()`. `MassTransitOptions` is now `MessagingOptions`, and its `EnableInMemoryOutbox` flag is gone: Wolverine always holds the messages a handler produces until that handler succeeds, so there was nothing left for the flag to switch off.
 
 ---
 
@@ -539,13 +577,13 @@ All settings live in `appsettings.json`. Override them with environment variable
    # Redis (optional template default)
    docker run -p 6379:6379 -d redis
 
-   # RabbitMQ (MassTransit — matches default RabbitMQOptions)
+   # RabbitMQ (Wolverine — matches default RabbitMQOptions)
    docker run -p 5672:5672 -p 15672:15672 -d rabbitmq:3-management
 
    # Seq (optional — structured log viewer)
    docker run -p 5341:5341 -p 80:80 -d datalust/seq
   ```
-3. **Update `appsettings.json`** so `DATABASE_CON`, `**RedisOptions**`, `**RabbitMQOptions**`, and `**MassTransitOptions**` match your environment.
+3. **Update `appsettings.json`** so `DATABASE_CON`, `**RedisOptions**`, `**RabbitMQOptions**`, and `**MessagingOptions**` match your environment.
 4. **Run the API:**
   ```bash
    dotnet run --project MyApp.Api
@@ -581,9 +619,12 @@ public class Product : BaseEntity
 
 ```csharp
 // MyApp.Application/Features/Products/Commands/CreateProductCommand.cs
-public record CreateProductCommand(string Name, decimal Price) : IRequest<ApiResponse<string>>;
 
-public class CreateProductHandler : IRequestHandler<CreateProductCommand, ApiResponse<string>>
+// No marker interface: Wolverine finds the handler by the `<Name>Handler.Handle` convention
+// and takes the message type from the first parameter.
+public record CreateProductCommand(string Name, decimal Price);
+
+public class CreateProductHandler
 {
     private readonly IApplicationContext _db;
     public CreateProductHandler(IApplicationContext db) => _db = db;
@@ -625,7 +666,7 @@ public DbSet<Product> Products => Set<Product>();
 // Controllers style
 [HttpPost]
 public async Task<IActionResult> Create([FromBody] CreateProductCommand cmd)
-    => CustomResponse(await _mediator.Send(cmd));
+    => CustomResponse(await _bus.InvokeAsync<ApiResponse<string>>(cmd));
 ```
 
 ---

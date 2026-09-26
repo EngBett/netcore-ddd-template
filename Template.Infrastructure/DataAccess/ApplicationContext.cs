@@ -2,22 +2,25 @@ using System.Globalization;
 using System.ComponentModel;
 using System.Data;
 using System.Reflection;
-using MediatR;
+using Microsoft.Extensions.Logging;
 using Template.Application.Interfaces;
 using Template.Domain.Models;
 using Template.Infrastructure.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Wolverine;
 
 namespace Template.Infrastructure.DataAccess;
 
 public class ApplicationContext : DbContext, IApplicationContext
 {
-    private readonly IMediator _mediator;
+    private readonly IMessageBus _bus;
+    private readonly ILogger<ApplicationContext> _logger;
 
-    public ApplicationContext(DbContextOptions<ApplicationContext> options, IMediator mediator)
+    public ApplicationContext(DbContextOptions<ApplicationContext> options, IMessageBus bus, ILogger<ApplicationContext> logger)
         : base(options)
     {
-        _mediator = mediator;
+        _bus = bus;
+        _logger = logger;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -28,7 +31,7 @@ public class ApplicationContext : DbContext, IApplicationContext
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var n = await base.SaveChangesAsync(cancellationToken);
-        await _mediator.DispatchDomainEventsAsync(this);
+        await _bus.DispatchDomainEventsAsync(this, _logger);
         return n;
     }
 

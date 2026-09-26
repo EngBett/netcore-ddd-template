@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -42,7 +43,17 @@ namespace Template.Api.Filters
                 Code = ResponseEnums.ResponseCodes.Fail,
                 Result = null
             };
-            if (context.Exception.GetType() == typeof(DomainException))
+            if (context.Exception is ValidationException validationException)
+            {
+                // Validation runs as Wolverine middleware in front of the handler, so a
+                // failure arrives here as a thrown exception rather than as invalid model
+                // state. Without this branch it reaches the catch-all below and the caller
+                // gets a 500 instead of the field errors.
+                context.HttpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+
+                context.Result = new BadRequestObjectResult(ValidationFailureResponse.From(validationException));
+            }
+            else if (context.Exception.GetType() == typeof(DomainException))
             {
                 apiResponse.Message = context.Exception.Message.ToString();
                 context.HttpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;

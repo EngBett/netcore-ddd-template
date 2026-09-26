@@ -1,4 +1,4 @@
-using MediatR;
+using Template.Domain.DomainEvents;
 
 namespace Template.Domain.Models
 {
@@ -11,17 +11,17 @@ namespace Template.Domain.Models
 
         public virtual string Id { get; set; } = Guid.NewGuid().ToString();
 
-        private List<INotification>? _domainEvents;
-        public IReadOnlyCollection<INotification> DomainEvents =>
-            _domainEvents?.AsReadOnly() ?? (IReadOnlyCollection<INotification>)Array.Empty<INotification>();
+        private List<IDomainEvent>? _domainEvents;
+        public IReadOnlyCollection<IDomainEvent> DomainEvents =>
+            _domainEvents?.AsReadOnly() ?? (IReadOnlyCollection<IDomainEvent>)Array.Empty<IDomainEvent>();
 
-        public void AddDomainEvent(INotification eventItem)
+        public void AddDomainEvent(IDomainEvent eventItem)
         {
-            _domainEvents = _domainEvents ?? new List<INotification>();
+            _domainEvents = _domainEvents ?? new List<IDomainEvent>();
             _domainEvents.Add(eventItem);
         }
 
-        public void RemoveDomainEvent(INotification eventItem)
+        public void RemoveDomainEvent(IDomainEvent eventItem)
         {
             _domainEvents?.Remove(eventItem);
         }

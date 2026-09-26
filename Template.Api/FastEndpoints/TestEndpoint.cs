@@ -1,5 +1,5 @@
 using FastEndpoints;
-using MediatR;
+using Wolverine;
 using Template.Application.Features.Todos.Models;
 using Template.Application.Features.Todos.Queries;
 using Template.Common.Models;
@@ -11,7 +11,7 @@ public class TestRequest
     public string UserId { get; set; } = null!;
 }
 
-public class TestEndpoint(ISender sender) : Endpoint<TestRequest, ApiResponse<IEnumerable<TodoDto>>>
+public class TestEndpoint(IMessageBus bus) : Endpoint<TestRequest, ApiResponse<IEnumerable<TodoDto>>>
 {
     public override void Configure()
     {
@@ -22,7 +22,7 @@ public class TestEndpoint(ISender sender) : Endpoint<TestRequest, ApiResponse<IE
     public override async Task HandleAsync(TestRequest req, CancellationToken ct)
     {
         var query = new GetTodosQuery { UserId = req.UserId };
-        var response = await sender.Send(query, ct);
+        var response = await bus.InvokeAsync<ApiResponse<IEnumerable<TodoDto>>>(query, ct);
         await Send.OkAsync(response, ct);
     }
 }

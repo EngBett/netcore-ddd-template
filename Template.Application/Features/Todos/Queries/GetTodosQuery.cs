@@ -1,16 +1,15 @@
-using MediatR;
 using Template.Application.Features.Todos.Models;
 using Template.Application.Interfaces;
 using Template.Common.Models;
 
 namespace Template.Application.Features.Todos.Queries;
 
-public class GetTodosQuery : IRequest<ApiResponse<IEnumerable<TodoDto>>>
+public class GetTodosQuery
 {
     public string UserId { get; set; } = null!;
 }
 
-public class GetTodosQueryHandler : IRequestHandler<GetTodosQuery, ApiResponse<IEnumerable<TodoDto>>>
+public class GetTodosQueryHandler
 {
     private readonly IApplicationContext _db;
 
