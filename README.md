@@ -1,6 +1,6 @@
 # DDD .NET Template
 
-A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, a **.NET Aspire** app host for local orchestration, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
 > **Licensing note.** This template uses **Wolverine** for both in-process CQRS and broker messaging, in place of MediatR and MassTransit. Both of those moved to commercial licences; WolverineFx is MIT, so a service scaffolded from this template carries no per-seat licence obligation for its dispatcher or its message bus — and there is one library to learn instead of two.
 
@@ -25,6 +25,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
 - [Configuration](#configuration)
 - [Messaging (Wolverine + RabbitMQ)](#messaging-wolverine--rabbitmq)
 - [Running Locally](#running-locally)
+- [Local Orchestration (Aspire)](#local-orchestration-aspire)
 - [Adding Features](#adding-features)
 - [Publishing the Template to NuGet](#publishing-the-template-to-nuget)
 
@@ -59,6 +60,7 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
 - **Messaging** — **Wolverine** is configured in `src/Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (**`AutoProvision()`** declares the topology on start; each contract's queue is named in the `BrokerContracts` list).
 - **One dispatcher, two jobs** — Wolverine is both the mediator and the message bus. Which messages leave the process is decided by the `BrokerContracts` list in `src/Template.Application/DependencyInjection.cs`; everything else runs on an in-process local queue.
+- **One command to run it all** — a **.NET Aspire** app host starts the database, Redis, RabbitMQ and Seq alongside the API. The service keeps no Aspire dependency: the app host injects the same configuration keys the service already reads, so it runs identically without Aspire.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -114,6 +116,7 @@ Every concern is separated into its own project, making the codebase easy to nav
 | **FastEndpoints 8**          | *(optional)* Slim, high-performance endpoint model                         |
 | **IdentityModel**            | JWT claim helpers                                                          |
 | **Wolverine 6**              | In-process CQRS *and* **RabbitMQ** messaging; MIT                          |
+| **.NET Aspire 13**           | Local orchestration of dependencies (app host only; the service has no Aspire reference) |
 
 
 ---
@@ -314,7 +317,7 @@ MyApp/
 ├── MyApp.sln                              # Solution file
 │
 ├── src/
-│   ├── src/MyApp.Api/                             # HTTP entry-point project
+│   ├── MyApp.Api/                             # HTTP entry-point project
 │   │   ├── Controllers/                       # [controllers style] MVC controller classes
 │   │   │   ├── BaseController.cs              #   Shared HTTP-response helper
 │   │   │   └── V1/
@@ -338,7 +341,12 @@ MyApp/
 │   │   ├── DependencyInjection.cs             # HTTP pipeline: controllers, Swagger, CORS, JWT wiring (calls Infrastructure for auth)
 │   │   └── Dockerfile                         # Multi-stage Docker build
 │   │
-│   ├── src/MyApp.Application/                     # CQRS / use-case layer
+│   ├── MyApp.AppHost/                         # .NET Aspire app host (local orchestration)
+│   │   ├── Program.cs                         #   Declares rabbitmq/redis/seq/database and maps
+│   │   │                                      #   each to config keys the API already binds
+│   │   └── MyApp.AppHost.csproj               #   The only project referencing Aspire packages
+│   │
+│   ├── MyApp.Application/                     # CQRS / use-case layer
 │   │   ├── Features/                          # Feature slices (vertical folders)
 │   │   │   └── Todos/                         # Example feature area
 │   │   │       ├── Commands/                  # command + its handler, for writes
@@ -352,7 +360,7 @@ MyApp/
 │   │   ├── Consumers/                         # Wolverine message consumers, discovered by convention (e.g. RabbitMQ)
 │   │   └── DependencyInjection.cs             # Wolverine: handler discovery, validation, RabbitMQ, broker contracts
 │   │
-│   ├── src/MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
+│   ├── MyApp.Domain/                          # Core business layer (no infrastructure dependencies)
 │   │   ├── Models/
 │   │   │   ├── BaseEntity.cs                  # Base class: Id, DateCreated, DateUpdated, IsDeleted,
 │   │   │   │                                  #   domain-event collection, equality by Id
@@ -363,7 +371,7 @@ MyApp/
 │   │   │   └── ISpecifications.cs             # Specification pattern contract
 │   │   └── DomainEvents/                      # IDomainEvent marker + events (e.g. Todos/TodoCreatedEvent)
 │   │
-│   ├── src/MyApp.Infrastructure/                  # External-system implementations
+│   ├── MyApp.Infrastructure/                  # External-system implementations
 │   │   ├── DependencyInjection.cs             # EF Core, Redis cache, JWT authentication
 │   │   ├── DataAccess/
 │   │   │   ├── ApplicationContext.cs          # EF Core DbContext; implements IApplicationContext;
@@ -376,7 +384,7 @@ MyApp/
 │   │       ├── SqlExtension.cs                # Raw SQL mapping helpers
 │   │       └── SqlScriptsMigrationBuilder.cs  # Run embedded SQL scripts during migrations
 │   │
-│   └── src/MyApp.Common/                          # Cross-cutting concerns shared across all layers
+│   └── MyApp.Common/                          # Cross-cutting concerns shared across all layers
 │       ├── Options/
 │       │   ├── ApplicationOptions.cs          # Strongly-typed binding for the `ApplicationOptions` section in appsettings
 │       │   ├── RedisOptions.cs                 # `RedisOptions`: connection string + cache key prefix
@@ -554,14 +562,27 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 
 ## Running Locally
 
-**Prerequisites**: .NET 10 SDK, Docker (optional; Redis is optional if you change caching later).
+**Prerequisites**: .NET 10 SDK, and a container runtime (Docker Desktop, Podman, or Rancher Desktop) if you use the Aspire AppHost.
 
 1. **Install the template** (see [Installation](#installation)), then create a project with the database you need, for example:
   ```bash
    dotnet new install /path/to/this/repo
-   dotnet new ddd-template --name MyApp --postgres --output ./src/MyApp
+   dotnet new ddd-template --name MyApp --postgres --output ./MyApp
   ```
-2. **Start infrastructure** that matches `DatabaseKind` in `appsettings.json`:
+
+2. **Run everything with Aspire** — one command starts the database, Redis, RabbitMQ, Seq and the API, wired together:
+  ```bash
+   dotnet run --project src/MyApp.AppHost
+  ```
+   The Aspire dashboard opens with a link to each resource. See
+   [Local Orchestration (Aspire)](#local-orchestration-aspire) for what it injects.
+
+3. **Or run the API on its own**, against infrastructure you manage yourself:
+  ```bash
+   dotnet run --project src/MyApp.Api
+  ```
+   In this mode the API reads everything from its own `appsettings.json`, so bring up
+   whatever matches it:
   ```bash
    # SQL Server (DatabaseKind: mssql)
    docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Password@123" \
@@ -577,7 +598,7 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 
    # SQLite needs no server — ensure `DATABASE_CON` path is writable (e.g. create `./data`).
 
-   # Redis (optional template default)
+   # Redis
    docker run -p 6379:6379 -d redis
 
    # RabbitMQ (Wolverine — matches default RabbitMQOptions)
@@ -586,16 +607,65 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
    # Seq (optional — structured log viewer)
    docker run -p 5341:5341 -p 80:80 -d datalust/seq
   ```
-3. **Update `appsettings.json`** so `DATABASE_CON`, `**RedisOptions**`, `**RabbitMQOptions**`, and `**MessagingOptions**` match your environment.
-4. **Run the API:**
-  ```bash
-   dotnet run --project MyApp.Api
-  ```
-5. **Browse:**
+   Then update `appsettings.json` so `DATABASE_CON`, `**RedisOptions**`,
+   `**RabbitMQOptions**`, and `**MessagingOptions**` match your environment.
+
+4. **Browse:**
   - Swagger UI → `https://localhost:7254/swagger`
   - Health check → `https://localhost:7254/_health`
   - Metrics → `https://localhost:7254/metrics`
 
+  Under Aspire the ports are assigned by the AppHost; use the dashboard's links instead.
+
+---
+
+## Local Orchestration (Aspire)
+
+`src/MyApp.AppHost` is a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) app host. It starts the service together with the containers it depends on:
+
+| Resource   | Purpose                                              |
+| ---------- | ---------------------------------------------------- |
+| `rabbitmq` | Wolverine's broker, with the management plugin enabled |
+| `redis`    | `IDistributedCache` backing store                    |
+| `seq`      | Structured log viewer that `ApplicationOptions.LogUrl` points at |
+| database   | `sqlserver`, `postgres` or `mysql`, matching the provider you scaffolded with |
+
+```bash
+dotnet run --project src/MyApp.AppHost
+```
+
+### The AppHost is the only project that knows about Aspire
+
+The service itself references **no** Aspire package and uses **no** service discovery. The AppHost's whole job is to translate each resource into the *same* configuration keys the service already binds from `appsettings.json`:
+
+| Config key                       | Comes from                          |
+| -------------------------------- | ----------------------------------- |
+| `DATABASE_CON`                   | the database resource's connection string |
+| `RedisOptions:ConnectionString`  | the `redis` resource                |
+| `RabbitMQOptions:HostName`/`:Port`/`:UserName`/`:Password` | the `rabbitmq` resource, whose credentials Aspire generates |
+| `ApplicationOptions:LogUrl`      | the `seq` endpoint URL              |
+
+Environment variables use `__` where configuration uses `:`, so `RabbitMQOptions__HostName` binds to `RabbitMQOptions:HostName`.
+
+Two things follow from this, and both are the point:
+
+- **Nothing is Aspire-only.** Every value the AppHost injects can be set in production as a plain environment variable or `appsettings` entry, with no Aspire in the picture.
+- **The service still runs standalone.** `dotnet run --project src/MyApp.Api` works exactly as it did before, falling back to its own `appsettings.json`.
+
+To see precisely what gets injected without starting any container:
+
+```bash
+dotnet run --project src/MyApp.AppHost -- --publisher manifest --output-path manifest.json
+```
+
+### Notes and limits
+
+- **Add resources, not clients.** To add a dependency, add it in the AppHost and map it to a config key with `WithEnvironment`. Do not add Aspire client packages or `AddServiceDiscovery` to the service — that is what keeps production configuration transparent.
+- **`DatabaseKind` is not injected.** The `appsettings.json` that ships with the provider you chose already sets it, and it stays the single source of truth.
+- **SQLite has no resource.** It is a file, not a service, so the AppHost injects no connection string and the API keeps the `DATABASE_CON` from its own `appsettings.json`.
+- **The Aspire dashboard shows console logs, not traces or metrics.** This template instruments with Serilog and Prometheus rather than OpenTelemetry, and the service intentionally has no OTLP exporter. Adding `OpenTelemetry.Exporter.OpenTelemetryProtocol` and reading the `OTEL_EXPORTER_OTLP_ENDPOINT` that Aspire already sets would light the dashboard up without introducing any Aspire dependency — it is just not wired by default.
+- **Serilog's Seq sink is configured twice.** `ApplicationOptions.LogUrl` (which the AppHost sets) drives the sink added in `Program.cs`, while the `Serilog:WriteTo` section in `appsettings.json` hardcodes `http://localhost:5341`. That duplication predates Aspire; only the first is orchestrated.
+- **In this repository the AppHost contains every database branch**, the same way `MyApp.Infrastructure` references every EF Core provider. `dotnet new` keeps exactly one. Running the template's own AppHost therefore starts more than one database server, which is why each branch names its database resource after its provider — Aspire rejects duplicate resource names.
 ---
 
 ## Adding Features

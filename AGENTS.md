@@ -22,6 +22,7 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 ## Layout
 
 - Projects live under **`src/`**; **`tests/`** sits beside it for test projects (currently a placeholder holding only `.gitkeep`). `Template.sln` and `global.json` stay at the repository root.
+- `src/Template.AppHost` is the .NET Aspire app host. It is the **only** project allowed to reference Aspire packages.
 - Every path in **`.template.config/template.json`** — both `rename` keys/values and `exclude` entries — must carry the `src/` prefix. Miss one and `dotnet new` emits the wrong files: e.g. two `Program.cs` variants, which fails to compile on duplicate top-level statements. Scaffold each `--apiStyle` after touching it.
 - `src/Template.Api/Dockerfile` builds from the **repository root** as context, so its `COPY`/`restore` paths are `src/Template.Api/...`.
 
@@ -34,6 +35,16 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 | EF Core, Redis, migrations | `src/Template.Infrastructure/DependencyInjection.cs` |
 | Strongly typed app settings | `src/Template.Common/Options/*.cs` |
 | Sample appsettings | `src/Template.Api/appsettings.json` and provider-specific variants |
+
+## Aspire
+
+- **The app host owns Aspire; the service knows nothing about it.** `Template.Api` must never reference an Aspire client package or call `AddServiceDiscovery`. The app host's only job is to translate resources into the **same explicit configuration keys the service already binds** (`DATABASE_CON`, `RedisOptions:*`, `RabbitMQOptions:*`, `ApplicationOptions:LogUrl`), using `WithEnvironment` and `__` for `:`. Anything injected must be settable in production as a plain env var with no Aspire present, and `dotnet run --project src/Template.Api` must keep working on its own.
+- Add a new dependency by adding the resource in the app host and mapping it to a config key — not by adding a client package to the service.
+- `AddProject` is called with a **path** (`"../Template.Api/Template.Api.csproj"`), not the generated `Projects.Template_Api`: `dotnet new` rewrites `Template` to the chosen project name and would turn that identifier into `Projects.Acme_Svc_Api`-style mush (`Projects.Acme.Svc_Api`), which does not compile.
+- Each database branch names its database resource after its provider (`sqlserverdb`, `postgresdb`, `mysqldb`). Aspire rejects duplicate resource names, and the template source keeps **all** branches, so a shared name makes the template's own app host throw on startup.
+- `DatabaseKind` is deliberately not injected; the provider's `appsettings.json` owns it.
+- The app host's `UserSecretsId` is listed in `template.json`'s `guids` array so each scaffolded project gets a fresh one. Aspire stores the container passwords it generates there, and they must stay in step with the data volumes.
+- To check the wiring without starting containers: `dotnet run --project src/Template.AppHost -- --publisher manifest --output-path manifest.json`.
 
 ## Configuration conventions
 
