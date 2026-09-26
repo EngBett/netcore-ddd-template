@@ -56,16 +56,15 @@
     "database": {
       "type": "parameter",
       "datatype": "choice",
-      "shortName": "db",
-      "description": "Default relational database provider (EF Core). Can also be set with --postgres, --mysql, --sqlite, or --mssql flags.",
+      "description": "Relational database provider (EF Core). Defaults to PostgreSQL. Can also be set with --postgres, --mysql, --sqlite, or --mssql.",
       "choices": [
         {
           "choice": "mssql",
-          "description": "Microsoft SQL Server"
+          "description": "Microsoft SQL Server (image is linux/amd64 only; will not run on Apple Silicon)"
         },
         {
           "choice": "postgres",
-          "description": "PostgreSQL (Npgsql)"
+          "description": "PostgreSQL (Npgsql) (default)"
         },
         {
           "choice": "sqlite",
@@ -73,10 +72,10 @@
         },
         {
           "choice": "mysql",
-          "description": "MySQL (Pomelo)"
+          "description": "MySQL (Pomelo; no EF Core 10 release yet - see README)"
         }
       ],
-      "defaultValue": "mssql"
+      "defaultValue": "postgres"
     },
     "postgres": {
       "type": "parameter",
@@ -102,17 +101,25 @@
       "defaultValue": "false",
       "description": "Use SQL Server (shortcut for --database mssql)."
     },
+    "anyDatabaseFlag": {
+      "type": "computed",
+      "value": "(mssql || postgres || mysql || sqlite)"
+    },
+    "resolvedMssql": {
+      "type": "computed",
+      "value": "(mssql || (!anyDatabaseFlag && database == \"mssql\"))"
+    },
     "resolvedPostgres": {
       "type": "computed",
-      "value": "(postgres || database == \"postgres\")"
+      "value": "(postgres || (!anyDatabaseFlag && database == \"postgres\"))"
     },
     "resolvedMysql": {
       "type": "computed",
-      "value": "(mysql || database == \"mysql\")"
+      "value": "(mysql || (!anyDatabaseFlag && database == \"mysql\"))"
     },
     "resolvedSqlite": {
       "type": "computed",
-      "value": "(sqlite || database == \"sqlite\")"
+      "value": "(sqlite || (!anyDatabaseFlag && database == \"sqlite\"))"
     },
     "usePostgres": {
       "type": "computed",
@@ -128,7 +135,7 @@
     },
     "useMssql": {
       "type": "computed",
-      "value": "(!resolvedPostgres && !resolvedMysql && !resolvedSqlite && (mssql || database == \"mssql\"))"
+      "value": "(resolvedMssql && !resolvedPostgres && !resolvedMysql && !resolvedSqlite)"
     }
   },
   "sources": [

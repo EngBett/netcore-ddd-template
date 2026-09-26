@@ -1,5 +1,7 @@
 # DDD .NET Template
 
+[![CI](https://github.com/EngBett/netcore-ddd-template/actions/workflows/ci.yml/badge.svg)](https://github.com/EngBett/netcore-ddd-template/actions/workflows/ci.yml)
+
 A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, a **.NET Aspire** app host for local orchestration, a **Reqnroll** BDD test suite, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
 > **Licensing note.** This template uses **Wolverine** for both in-process CQRS and broker messaging, in place of MediatR and MassTransit. Both of those moved to commercial licences; WolverineFx is MIT, so a service scaffolded from this template carries no per-seat licence obligation for its dispatcher or its message bus — and there is one library to learn instead of two.
@@ -182,7 +184,7 @@ dotnet new ddd-template --name MyApp --apiStyle fastendpoints
 dotnet new ddd-template --name MyApp --database sqlite --apiStyle fastendpoints
 
 # Short form for database choice
-dotnet new ddd-template --name MyApp -db postgres
+dotnet new ddd-template --name MyApp --database postgres
 
 # Custom output directory
 dotnet new ddd-template --name MyApp --output ./src/MyApp
@@ -203,7 +205,7 @@ dotnet new ddd-template --name MyApp --output ./src/MyApp
 | `--mssql`            | boolean                                     | `false`       | Shortcut for `--database mssql` (explicit SQL Server)                  |
 
 
-If several `--postgres` / `--mysql` / `--sqlite` flags are passed together, resolution order is: **postgres**, then **mysql**, then **sqlite**. Otherwise the `--database` choice applies (default **mssql** when no flags are set).
+The default is **PostgreSQL**. A boolean flag (`--postgres` / `--mysql` / `--sqlite` / `--mssql`) always wins over the `--database` choice; if several are passed together, resolution order is **postgres**, then **mysql**, then **sqlite**, then **mssql**.
 
 ### Database providers
 
@@ -212,10 +214,10 @@ The generated **Api** project references every EF Core provider package; at runt
 
 | Provider             | `DatabaseKind` | Notes                                                                                                                                                                    |
 | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Microsoft SQL Server | `mssql`        | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer`                                                                                                                |
-| PostgreSQL           | `postgres`     | `UseNpgsql`, Npgsql provider                                                                                                                                             |
+| PostgreSQL **(default)** | `postgres` | `UseNpgsql`, Npgsql provider                                                                                                                                         |
+| Microsoft SQL Server | `mssql`        | `UseSqlServer`, `Microsoft.EntityFrameworkCore.SqlServer`. **The container image is `linux/amd64` only and will not run on Apple Silicon** — it exits with SIGSEGV under emulation. |
 | SQLite               | `sqlite`       | `UseSqlite`; ensure the `data` folder exists or adjust the path in `DATABASE_CON`                                                                                        |
-| MySQL                | `mysql`        | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `src/Template.Infrastructure/DependencyInjection.cs` if you use another server version |
+| MySQL                | `mysql`        | `UseMySql` via Pomelo; server version in code is pinned to **MySQL 8.0.36**—adjust in `src/Template.Infrastructure/DependencyInjection.cs` if you use another server version. **Provisional:** Pomelo 9.0.0 declares support for EF Core 9 only, so this runs an unsupported provider/EF combination until Pomelo ships an EF Core 10 release. |
 
 
 **Updating an existing project:** set `DatabaseKind` and `DATABASE_CON` in configuration to switch providers; no need to re-run the template.

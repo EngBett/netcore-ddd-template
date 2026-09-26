@@ -77,6 +77,12 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - Do **not** add FluentAssertions: version 8 moved to a paid licence, which would undo the reason this template dropped MediatR and MassTransit. Use xUnit's `Assert`.
 - After changing anything in `Template.Application` or `Template.Infrastructure`, run `dotnet test`.
 
+## CI
+
+- `.github/workflows/ci.yml` runs three jobs: build + `dotnet test`; a 12-way `apiStyle` x `database` matrix that scaffolds, asserts exactly one variant of each conditional file survived, builds, runs the scaffolded tests and resolves the Aspire manifest; and a job asserting every database selection path (choice and boolean shortcut) resolves to one provider.
+- **Touching `.template.config/template.json` means the matrix job is the thing that will catch you.** It needs no Docker — the Aspire check uses manifest generation, and the test suite uses SQLite in memory.
+- CI resolves from nuget.org only; the repository has no `NuGet.config`. Do not add one pointing at a private feed without adding credentials to the workflow.
+
 ## SDK
 
 - `global.json` pins **`10.0.100`** with **`rollForward: "latestFeature"`** so any installed .NET 10 SDK in the feature band can build. If CI requires an exact patch, align `global.json` or install that SDK.

@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A push that supersedes an in-flight run makes that run's result irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  # Builds the repository as a solution and runs the Reqnroll suite. This is the fast
+  # signal: it does not exercise `dotnet new` at all.
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # The suite disables external Wolverine transports and uses SQLite in memory, so it
+      # needs no services here.
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+  # The part most likely to break: template.json's conditional file paths. Every
+  # combination has to produce a project that compiles and whose own tests pass.
+  scaffold:
+    name: Scaffold ${{ matrix.apiStyle }} / ${{ matrix.database }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        apiStyle: [controllers, minimal, fastendpoints]
+        database: [postgres, mssql, sqlite, mysql]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Install the template
+        run: dotnet new install .
+
+      - name: Scaffold
+        run: |
+          mkdir -p /tmp/scaffold
+          cd /tmp/scaffold
+          dotnet new ddd-template \
+            --name Scaffold.Svc \
+            --apiStyle ${{ matrix.apiStyle }} \
+            --database ${{ matrix.database }} \
+            --output .
+
+      # Guards against a missed path in template.json leaving two Program.cs variants or
+      # two appsettings behind, which would otherwise fail later with a confusing error.
+      - name: Check exactly one variant of each conditional file survived
+        run: |
+          cd /tmp/scaffold
+          programs=$(ls src/Scaffold.Svc.Api/Program*.cs | wc -l)
+          projects=$(ls src/Scaffold.Svc.Api/*.csproj | wc -l)
+          settings=$(ls src/Scaffold.Svc.Api/appsettings*.json | wc -l)
+          echo "Program.cs=$programs csproj=$projects appsettings=$settings"
+          test "$programs" -eq 1 || { echo "::error::expected 1 Program.cs, found $programs"; exit 1; }
+          test "$projects" -eq 1 || { echo "::error::expected 1 .csproj, found $projects"; exit 1; }
+          test "$settings" -eq 1 || { echo "::error::expected 1 appsettings.json, found $settings"; exit 1; }
+
+      - name: Build the scaffolded project
+        run: dotnet build --configuration Release
+        working-directory: /tmp/scaffold
+
+      - name: Run the scaffolded project's tests
+        run: dotnet test --no-build --configuration Release
+        working-directory: /tmp/scaffold
+
+      # Resolves the whole Aspire resource graph and every injected environment variable
+      # without starting a container, so it catches a broken AppHost cheaply.
+      - name: Verify the Aspire resource graph
+        run: |
+          cd /tmp/scaffold
+          dotnet run --project aspire/Scaffold.Svc.AppHost --configuration Release --no-build \
+            -- --publisher manifest --output-path /tmp/manifest.json
+          python3 - <<'PY'
+          import json, sys
+          resources = json.load(open("/tmp/manifest.json"))["resources"]
+          env = resources["api"]["env"]
+          containers = sorted(k for k, v in resources.items() if v.get("type") == "container.v0")
+          print("containers:", containers)
+          print("DATABASE_CON:", env.get("DATABASE_CON", "(none)"))
+
+          required = [
+              "RabbitMQOptions__HostName", "RabbitMQOptions__Port",
+              "RabbitMQOptions__UserName", "RabbitMQOptions__Password",
+              "RedisOptions__ConnectionString", "ApplicationOptions__LogUrl",
+          ]
+          missing = [key for key in required if key not in env]
+          if missing:
+              sys.exit(f"::error::AppHost is not injecting: {missing}")
+
+          for name in ("rabbitmq", "redis", "seq"):
+              if name not in containers:
+                  sys.exit(f"::error::expected a {name} resource, got {containers}")
+
+          # SQLite is a file rather than a service, so it is the one provider with no
+          # database container and no injected connection string.
+          database = "${{ matrix.database }}"
+          if database == "sqlite":
+              if "DATABASE_CON" in env:
+                  sys.exit("::error::sqlite should not get an injected DATABASE_CON")
+          else:
+              expected = {"postgres": "postgres", "mssql": "sqlserver", "mysql": "mysql"}[database]
+              if expected not in containers:
+                  sys.exit(f"::error::expected a {expected} resource, got {containers}")
+              if expected not in env.get("DATABASE_CON", ""):
+                  sys.exit(f"::error::DATABASE_CON does not reference {expected}")
+          print("resource graph OK")
+          PY
+
+  # Asserts that every way of choosing a provider resolves to exactly one, including the
+  # boolean shortcuts overriding the --database default.
+  database-selection:
+    name: Database selection flags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install the template
+        run: dotnet new install .
+
+      - name: Every selection path resolves to one provider
+        run: |
+          set -euo pipefail
+          check() {
+            expected="$1"; shift
+            dir=$(mktemp -d)
+            ( cd "$dir" && dotnet new ddd-template --name Sel.Svc --output . "$@" >/dev/null )
+            actual=$(python3 -c "import json;print(json.load(open('$dir/src/Sel.Svc.Api/appsettings.json'))['DatabaseKind'])")
+            count=$(ls "$dir"/src/Sel.Svc.Api/appsettings*.json | wc -l)
+            if [ "$actual" != "$expected" ] || [ "$count" -ne 1 ]; then
+              echo "::error::[$*] expected $expected with 1 appsettings, got $actual with $count"
+              exit 1
+            fi
+            printf '  %-24s -> %s\n' "${*:-(no flags)}" "$actual"
+            rm -rf "$dir"
+          }
+          check postgres
+          check mssql    --database mssql
+          check postgres --database postgres
+          check sqlite   --database sqlite
+          check mysql    --database mysql
+          check mssql    --mssql
+          check postgres --postgres
+          check sqlite   --sqlite
+          check mysql    --mysql
