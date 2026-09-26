@@ -21,10 +21,10 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 
 ## Layout
 
-- Projects live under **`src/`**; **`tests/`** sits beside it for test projects (currently a placeholder holding only `.gitkeep`). `Template.sln` and `global.json` stay at the repository root.
-- `src/Template.AppHost` is the .NET Aspire app host. It is the **only** project allowed to reference Aspire packages.
+- Three top-level folders: **`src/`** (the service), **`aspire/`** (`Template.AppHost`, `Template.ServiceDefaults`), **`tests/`** (`Template.Tests`). `Template.sln` and `global.json` stay at the repository root.
+- `aspire/Template.AppHost` is the **only** project allowed to reference Aspire **Hosting** packages. `aspire/Template.ServiceDefaults` is referenced by the service and must stay free of Aspire packages entirely.
 - Every path in **`.template.config/template.json`** — both `rename` keys/values and `exclude` entries — must carry the `src/` prefix. Miss one and `dotnet new` emits the wrong files: e.g. two `Program.cs` variants, which fails to compile on duplicate top-level statements. Scaffold each `--apiStyle` after touching it.
-- `src/Template.Api/Dockerfile` builds from the **repository root** as context, so its `COPY`/`restore` paths are `src/Template.Api/...`.
+- `src/Template.Api/Dockerfile` builds from the **repository root** as context. Its `COPY` list must name **every** project file the API references — the four siblings under `src/` *and* `aspire/Template.ServiceDefaults` — because `dotnet restore` fails on a missing `ProjectReference` target.
 
 ## Where to change behavior
 
@@ -44,7 +44,10 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - Each database branch names its database resource after its provider (`sqlserverdb`, `postgresdb`, `mysqldb`). Aspire rejects duplicate resource names, and the template source keeps **all** branches, so a shared name makes the template's own app host throw on startup.
 - `DatabaseKind` is deliberately not injected; the provider's `appsettings.json` owns it.
 - The app host's `UserSecretsId` is listed in `template.json`'s `guids` array so each scaffolded project gets a fresh one. Aspire stores the container passwords it generates there, and they must stay in step with the data volumes.
-- To check the wiring without starting containers: `dotnet run --project src/Template.AppHost -- --publisher manifest --output-path manifest.json`.
+- To check the wiring without starting containers: `dotnet run --project aspire/Template.AppHost -- --publisher manifest --output-path manifest.json`. The manifest resolves the resource graph and every injected env var. `OTEL_EXPORTER_OTLP_ENDPOINT` is *not* in it — Aspire injects that at launch — so the OTLP path cannot be verified this way.
+- **`ServiceDefaults` omits `AddServiceDiscovery()` on purpose.** Aspire's stock version includes it; here it would make the service's HTTP targets depend on how it was launched, which is exactly what the configuration rules forbid. OpenTelemetry, health checks and `AddStandardResilienceHandler` are kept because they are portable. Do not add it back to "match the template".
+- ServiceDefaults registers the Wolverine `ActivitySource` and meter (both named `Wolverine`). Without them, message and command handling — most of what this service does — is absent from traces.
+- `MapDefaultEndpoints()` maps `/alive` (liveness, `live`-tagged checks only). `/_health` stays the readiness endpoint mapped by `Template.Api`'s own middleware; do not merge them.
 
 ## Configuration conventions
 
@@ -57,6 +60,15 @@ A **.NET 10** solution template using **DDD**, **Clean Architecture**, **CQRS (W
 - **Validators are registered once, by `UseFluentValidation()`.** It defaults to `DiscoverAndRegisterValidators`; adding `AddValidatorsFromAssembly` as well registers each validator twice and every rule then runs twice.
 - **`WolverineFx.RuntimeCompilation`** is a required package, not an optional extra: core WolverineFx 6.x dropped the Roslyn runtime compiler and the host throws on startup without it.
 - Do **not** reintroduce a flat `"Redis"` string key; use **`RedisOptions`** in JSON.
+
+## Tests
+
+- `tests/Template.Tests` is a **Reqnroll** (Gherkin) suite on xUnit. Features in `Features/`, bindings in `Steps/`, fixtures in `Support/`.
+- `Support/TestHost.cs` boots the service's **real** `AddApplicationDependencies`. Substitute nothing beyond the two things it already does: `DisableAllExternalWolverineTransports()` and SQLite in memory. `dotnet test` must keep needing no Docker.
+- Assert **behaviour through public APIs**, not Wolverine internals. Retry scoping is covered by asserting a rejected command returns in under 250 ms, not by inspecting handler chains — apply the policy globally and that scenario fails (the run went from 0.8 s to 8 s when tried).
+- `Support/SpyHandlers.cs` adds a second handler for `TodoCreatedEvent` so dispatch is observable; it is found because `TestHost` adds the test assembly to Wolverine's discovery. Reset its counter in a `[BeforeScenario]`.
+- Do **not** add FluentAssertions: version 8 moved to a paid licence, which would undo the reason this template dropped MediatR and MassTransit. Use xUnit's `Assert`.
+- After changing anything in `Template.Application` or `Template.Infrastructure`, run `dotnet test`.
 
 ## SDK
 

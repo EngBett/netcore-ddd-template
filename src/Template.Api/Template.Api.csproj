@@ -49,6 +49,7 @@
         <ProjectReference Include="..\Template.Domain\Template.Domain.csproj" />
         <ProjectReference Include="..\Template.Infrastructure\Template.Infrastructure.csproj" />
         <ProjectReference Include="..\Template.Common\Template.Common.csproj" />
+        <ProjectReference Include="..\..\aspire\Template.ServiceDefaults\Template.ServiceDefaults.csproj" />
     </ItemGroup>
 
     <!-- Exclude template variant files from this project's build.

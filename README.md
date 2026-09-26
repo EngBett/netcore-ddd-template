@@ -1,6 +1,6 @@
 # DDD .NET Template
 
-A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, a **.NET Aspire** app host for local orchestration, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
+A production-ready .NET 10 project template built on **Domain-Driven Design (DDD)** and **Clean Architecture** principles. It ships with CQRS and **RabbitMQ** messaging both handled by **Wolverine** (example consumer), Entity Framework Core (SQL Server, PostgreSQL, SQLite, or MySQL), JWT authentication, Serilog structured logging, Redis caching, Prometheus metrics, a **.NET Aspire** app host for local orchestration, a **Reqnroll** BDD test suite, and your choice of three API styles: traditional **MVC Controllers**, **Minimal APIs**, or **FastEndpoints**.
 
 > **Licensing note.** This template uses **Wolverine** for both in-process CQRS and broker messaging, in place of MediatR and MassTransit. Both of those moved to commercial licences; WolverineFx is MIT, so a service scaffolded from this template carries no per-seat licence obligation for its dispatcher or its message bus — and there is one library to learn instead of two.
 
@@ -26,6 +26,7 @@ A production-ready .NET 10 project template built on **Domain-Driven Design (DDD
 - [Messaging (Wolverine + RabbitMQ)](#messaging-wolverine--rabbitmq)
 - [Running Locally](#running-locally)
 - [Local Orchestration (Aspire)](#local-orchestration-aspire)
+- [Testing](#testing)
 - [Adding Features](#adding-features)
 - [Publishing the Template to NuGet](#publishing-the-template-to-nuget)
 
@@ -60,7 +61,8 @@ This template gives you a fully wired-up, opinionated starting point for buildin
 - **Database choice** — when you create a project, pick **SQL Server**, **PostgreSQL**, **SQLite**, or **MySQL**; the template wires the matching EF Core provider, packages, and sample `appsettings.json` for that database.
 - **Messaging** — **Wolverine** is configured in `src/Template.Application/DependencyInjection.cs` to use **RabbitMQ** (`RabbitMQOptions` in configuration). Example: `TodoMessageConsumer` consumes `TodoMessage` from the broker (**`AutoProvision()`** declares the topology on start; each contract's queue is named in the `BrokerContracts` list).
 - **One dispatcher, two jobs** — Wolverine is both the mediator and the message bus. Which messages leave the process is decided by the `BrokerContracts` list in `src/Template.Application/DependencyInjection.cs`; everything else runs on an in-process local queue.
-- **One command to run it all** — a **.NET Aspire** app host starts the database, Redis, RabbitMQ and Seq alongside the API. The service keeps no Aspire dependency: the app host injects the same configuration keys the service already reads, so it runs identically without Aspire.
+- **One command to run it all** — a **.NET Aspire** app host starts the database, Redis, RabbitMQ and Seq alongside the API. The app host injects the same configuration keys the service already reads, so the service runs identically without Aspire.
+- **Executable specifications** — a **Reqnroll** suite in `tests/` runs the service's real composition root against in-memory infrastructure, so `dotnet test` needs no Docker.
 
 Every concern is separated into its own project, making the codebase easy to navigate, test, and extend.
 
@@ -116,7 +118,9 @@ Every concern is separated into its own project, making the codebase easy to nav
 | **FastEndpoints 8**          | *(optional)* Slim, high-performance endpoint model                         |
 | **IdentityModel**            | JWT claim helpers                                                          |
 | **Wolverine 6**              | In-process CQRS *and* **RabbitMQ** messaging; MIT                          |
-| **.NET Aspire 13**           | Local orchestration of dependencies (app host only; the service has no Aspire reference) |
+| **.NET Aspire 13**           | Local orchestration of dependencies (`aspire/` app host + shared ServiceDefaults)        |
+| **OpenTelemetry**            | Tracing, metrics and logs via ServiceDefaults; exported only when OTLP is configured     |
+| **Reqnroll 3**               | Gherkin specifications for the test suite, on xUnit                                      |
 
 
 ---
@@ -341,11 +345,6 @@ MyApp/
 │   │   ├── DependencyInjection.cs             # HTTP pipeline: controllers, Swagger, CORS, JWT wiring (calls Infrastructure for auth)
 │   │   └── Dockerfile                         # Multi-stage Docker build
 │   │
-│   ├── MyApp.AppHost/                         # .NET Aspire app host (local orchestration)
-│   │   ├── Program.cs                         #   Declares rabbitmq/redis/seq/database and maps
-│   │   │                                      #   each to config keys the API already binds
-│   │   └── MyApp.AppHost.csproj               #   The only project referencing Aspire packages
-│   │
 │   ├── MyApp.Application/                     # CQRS / use-case layer
 │   │   ├── Features/                          # Feature slices (vertical folders)
 │   │   │   └── Todos/                         # Example feature area
@@ -401,7 +400,24 @@ MyApp/
 │           ├── GenericTypeExtensions.cs        # GetGenericTypeName() helper for logging type names
 │           └── QueryableExtension.cs          # Pagination and ordering helpers
 │
-└── tests/                                 # Test projects go here
+├── aspire/                                # .NET Aspire projects
+│   ├── MyApp.AppHost/                     # Local orchestration: declares rabbitmq/redis/seq/
+│   │   │                                  #   database and maps each to the config keys the
+│   │   │                                  #   API already binds. Only project using Aspire
+│   │   │                                  #   Hosting packages.
+│   │   ├── Program.cs
+│   │   └── MyApp.AppHost.csproj
+│   └── MyApp.ServiceDefaults/             # Shared host wiring referenced by the service
+│       ├── Extensions.cs                  #   AddServiceDefaults(): OpenTelemetry, health
+│       │                                  #   checks, HttpClient resilience. No service
+│       │                                  #   discovery — see the file's remarks.
+│       └── MyApp.ServiceDefaults.csproj
+│
+└── tests/
+    └── MyApp.Tests/                       # Reqnroll (Gherkin) specifications
+        ├── Features/                      #   Cqrs / DomainEvents / BrokerRouting .feature
+        ├── Steps/                          #   Step definitions
+        └── Support/                        #   Boots the real composition root once per run
 ```
 
 ---
@@ -572,7 +588,7 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 
 2. **Run everything with Aspire** — one command starts the database, Redis, RabbitMQ, Seq and the API, wired together:
   ```bash
-   dotnet run --project src/MyApp.AppHost
+   dotnet run --project aspire/MyApp.AppHost
   ```
    The Aspire dashboard opens with a link to each resource. See
    [Local Orchestration (Aspire)](#local-orchestration-aspire) for what it injects.
@@ -621,7 +637,14 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 
 ## Local Orchestration (Aspire)
 
-`src/MyApp.AppHost` is a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) app host. It starts the service together with the containers it depends on:
+The `aspire/` folder holds two projects:
+
+| Project                  | Role                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `MyApp.AppHost`          | Starts the service and its dependencies. The only project referencing Aspire **Hosting** packages. |
+| `MyApp.ServiceDefaults`  | Shared host wiring the service itself references: OpenTelemetry, health checks, HttpClient resilience. |
+
+`aspire/MyApp.AppHost` is a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) app host. It starts the service together with the containers it depends on:
 
 | Resource   | Purpose                                              |
 | ---------- | ---------------------------------------------------- |
@@ -631,10 +654,10 @@ The API host starts **Wolverine** as a hosted service when the process starts; e
 | database   | `sqlserver`, `postgres` or `mysql`, matching the provider you scaffolded with |
 
 ```bash
-dotnet run --project src/MyApp.AppHost
+dotnet run --project aspire/MyApp.AppHost
 ```
 
-### The AppHost is the only project that knows about Aspire
+### The AppHost is the only project referencing Aspire
 
 The service itself references **no** Aspire package and uses **no** service discovery. The AppHost's whole job is to translate each resource into the *same* configuration keys the service already binds from `appsettings.json`:
 
@@ -655,17 +678,69 @@ Two things follow from this, and both are the point:
 To see precisely what gets injected without starting any container:
 
 ```bash
-dotnet run --project src/MyApp.AppHost -- --publisher manifest --output-path manifest.json
+dotnet run --project aspire/MyApp.AppHost -- --publisher manifest --output-path manifest.json
 ```
+
+### ServiceDefaults, and the one thing it leaves out
+
+`Program.cs` calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`. That gives every host:
+
+- **OpenTelemetry** logging, metrics and tracing, including Wolverine's own `ActivitySource` and meter — so command and message handling shows up in traces rather than being the invisible majority of what the service does.
+- **Health checks**, with a `self` check tagged `live`. `MapDefaultEndpoints()` maps `/alive` for liveness; `/_health` remains the readiness endpoint mapped by the API's own middleware.
+- **HttpClient resilience** (`AddStandardResilienceHandler`): retries, circuit breaker and timeouts on every `HttpClient`.
+
+**It deliberately does not call `AddServiceDiscovery()`**, which Aspire's stock ServiceDefaults does. Service discovery resolves logical names like `https://api` out of configuration the app host injects, which makes the service's HTTP targets depend on how it was launched — the one thing this template's configuration approach rules out, because it cannot be mirrored in production without reproducing Aspire's scheme. Everything that *is* included is portable: OTLP switches on via the standard `OTEL_EXPORTER_OTLP_ENDPOINT`, and resilience needs no configuration at all. If you add a second service later, give the caller an explicit base-address option rather than reintroducing discovery.
 
 ### Notes and limits
 
 - **Add resources, not clients.** To add a dependency, add it in the AppHost and map it to a config key with `WithEnvironment`. Do not add Aspire client packages or `AddServiceDiscovery` to the service — that is what keeps production configuration transparent.
 - **`DatabaseKind` is not injected.** The `appsettings.json` that ships with the provider you chose already sets it, and it stays the single source of truth.
 - **SQLite has no resource.** It is a file, not a service, so the AppHost injects no connection string and the API keeps the `DATABASE_CON` from its own `appsettings.json`.
-- **The Aspire dashboard shows console logs, not traces or metrics.** This template instruments with Serilog and Prometheus rather than OpenTelemetry, and the service intentionally has no OTLP exporter. Adding `OpenTelemetry.Exporter.OpenTelemetryProtocol` and reading the `OTEL_EXPORTER_OTLP_ENDPOINT` that Aspire already sets would light the dashboard up without introducing any Aspire dependency — it is just not wired by default.
+- **Serilog and Prometheus stay as they are.** ServiceDefaults adds OpenTelemetry alongside them rather than replacing them: Serilog still writes to console and Seq, `/metrics` still serves Prometheus, and OTLP export is switched on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is present.
 - **Serilog's Seq sink is configured twice.** `ApplicationOptions.LogUrl` (which the AppHost sets) drives the sink added in `Program.cs`, while the `Serilog:WriteTo` section in `appsettings.json` hardcodes `http://localhost:5341`. That duplication predates Aspire; only the first is orchestrated.
 - **In this repository the AppHost contains every database branch**, the same way `MyApp.Infrastructure` references every EF Core provider. `dotnet new` keeps exactly one. Running the template's own AppHost therefore starts more than one database server, which is why each branch names its database resource after its provider — Aspire rejects duplicate resource names.
+---
+
+## Testing
+
+`tests/MyApp.Tests` is a [Reqnroll](https://reqnroll.net/) suite — Gherkin `.feature` files with C# step definitions, running on xUnit.
+
+```bash
+dotnet test
+```
+
+```
+tests/MyApp.Tests/
+├── Features/
+│   ├── Cqrs.feature           # dispatch, validation, and that rejection is immediate
+│   ├── DomainEvents.feature   # events reach handlers; an unhandled one does not fail the write
+│   └── BrokerRouting.feature  # only declared contracts are routed to RabbitMQ
+├── Steps/                     # step definitions
+└── Support/                   # TestHost, test DbContext, spy handler
+```
+
+### The suite runs the real composition root
+
+`Support/TestHost.cs` calls the service's own `AddApplicationDependencies` rather than a hand-rolled stand-in, so the handler discovery, validation middleware, broker routing and retry scoping under test are the ones that ship. Exactly two things are substituted:
+
+- **external transports are disabled**, so no RabbitMQ broker is needed;
+- **the database is SQLite in memory**, so no server is needed.
+
+That means `dotnet test` needs no Docker and no infrastructure, and it stays fast enough to run on every build.
+
+Two details worth knowing if you extend it:
+
+- `Support/SpyHandlers.cs` adds a *second* handler for the service's own `TodoCreatedEvent`. Wolverine invokes every handler it finds for a message, so this observes that dispatch really reached the concrete type without having to make the shipped handler observable. It is discovered because `TestHost` adds the test assembly to Wolverine's discovery.
+- `Support/TestApplicationContext.cs` subclasses the real `ApplicationContext`, so `SaveChangesAsync` — and therefore domain-event dispatch — is the production code path. It only adds a `Widget` entity to hang events on.
+
+### What it deliberately does not cover
+
+The suite asserts behaviour through public APIs, so it stops where that would require reflecting into Wolverine's internals or standing up infrastructure:
+
+- **Retry scoping is asserted by its consequence, not its configuration.** Rather than inspecting handler chains for failure rules, `Cqrs.feature` asserts that a rejected command comes back in under 250 ms. Apply the retry policy globally instead of per broker contract and that scenario fails — it took 8 seconds when tried.
+- **Nothing talks to a real broker or database.** For that, `Aspire.Hosting.Testing` can start the AppHost's containers in a test; it needs a container runtime, so it is not wired up here.
+- **HTTP-level behaviour is not covered**, because the three API styles expose their endpoints differently and a single suite would need conditional code per style. The validation-to-400 mapping described under [Error handling](#data-flow-request-lifecycle) is the main thing this leaves untested.
+
 ---
 
 ## Adding Features

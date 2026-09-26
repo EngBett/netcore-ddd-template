@@ -25,7 +25,7 @@ var redis = builder.AddRedis("redis")
 // port nothing is listening on.
 var seq = builder.AddSeq("seq");
 
-var api = builder.AddProject("api", "../Template.Api/Template.Api.csproj")
+var api = builder.AddProject("api", "../../src/Template.Api/Template.Api.csproj")
     // RabbitMQOptions is a decomposed host/port/credential set rather than a single
     // connection string, so each part is mapped on its own. Aspire generates the
     // credentials, so they are read off the resource instead of being hard-coded.

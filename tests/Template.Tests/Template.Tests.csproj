@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Reqnroll.xUnit brings Reqnroll plus the MSBuild generator that turns
+             .feature files into xUnit tests. -->
+        <PackageReference Include="Reqnroll.xUnit" Version="3.3.4" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+        <!-- The suite runs against SQLite regardless of the provider this service was
+             scaffolded with, so it needs its own reference rather than relying on
+             whichever provider Infrastructure pulled in. -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Template.Application\Template.Application.csproj" />
+        <ProjectReference Include="..\..\src\Template.Infrastructure\Template.Infrastructure.csproj" />
+    </ItemGroup>
+
+</Project>

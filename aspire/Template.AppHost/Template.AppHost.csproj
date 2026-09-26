@@ -35,7 +35,7 @@
              by path in Program.cs rather than through the generated Projects.* class,
              because `dotnet new` rewrites "Template" to the chosen project name and
              would turn Projects.Template_Api into an invalid identifier. -->
-        <ProjectReference Include="..\Template.Api\Template.Api.csproj" />
+        <ProjectReference Include="..\..\src\Template.Api\Template.Api.csproj" />
     </ItemGroup>
 
 </Project>
