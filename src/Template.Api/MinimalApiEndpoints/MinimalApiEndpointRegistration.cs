@@ -1,4 +1,5 @@
 using Wolverine;
+using Template.Api.Extensions;
 using Template.Application.Features.Todos.Models;
 using Template.Common.Models;
 using Template.Application.Features.Todos.Queries;
@@ -26,7 +27,7 @@ public static class MinimalApiEndpointRegistration
         {
             var query = new GetTodosQuery { UserId = userId };
             var response = await bus.InvokeAsync<ApiResponse<IEnumerable<TodoDto>>>(query, cancellationToken);
-            return Results.Ok(response);
+            return response.ToHttpResult();
         })
         .WithName("GetTest");
     }

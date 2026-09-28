@@ -19,6 +19,17 @@ public class CqrsSteps
     private ValidationException? _validationFailure;
     private long _elapsedMilliseconds;
 
+    [Given("a create todo command has already been handled once")]
+    public static async Task GivenACreateTodoCommandHasAlreadyBeenHandledOnce()
+    {
+        // Wolverine compiles a handler's code the first time its message is dispatched, which
+        // takes around a second. The timing scenario measures retries, not that compilation,
+        // and without this it failed whenever xUnit happened to order it first.
+        using var scope = TestHost.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IMessageBus>().InvokeAsync<ApiResponse<TodoDto>>(
+            new CreateTodoCommand { Title = "Warm up", Description = "Compiles the handler" });
+    }
+
     [When("I dispatch a todo query for user {string}")]
     public async Task WhenIDispatchATodoQueryForUser(string userId) =>
         await DispatchAsync<ApiResponse<IEnumerable<TodoDto>>>(new GetTodosQuery { UserId = userId });

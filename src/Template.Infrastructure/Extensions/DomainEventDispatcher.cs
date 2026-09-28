@@ -10,13 +10,13 @@ using Wolverine;
 
 namespace Template.Infrastructure.Extensions
 {
-    static class DomainEventDispatcher
+    static partial class DomainEventDispatcher
     {
         public static async Task DispatchDomainEventsAsync(this IMessageBus bus, ApplicationContext ctx, ILogger logger)
         {
             var domainEntities = ctx.ChangeTracker
                 .Entries<BaseEntity>()
-                .Where(x => x.Entity.DomainEvents != null && x.Entity.DomainEvents.Any());
+                .Where(x => x.Entity.DomainEvents.Count > 0);
 
             var domainEvents = domainEntities
                 .SelectMany(x => x.Entity.DomainEvents)
@@ -37,14 +37,16 @@ namespace Template.Infrastructure.Extensions
                 // succeeding while still making the gap visible.
                 if (bus.PreviewSubscriptions(domainEvent).Count == 0)
                 {
-                    logger.LogWarning(
-                        "Domain event {DomainEvent} was raised but no handler is registered for it; skipping.",
-                        domainEvent.GetType().Name);
+                    LogUnhandledDomainEvent(logger, domainEvent.GetType().Name);
                     continue;
                 }
 
                 await bus.InvokeAsync(domainEvent);
             }
         }
+
+        [LoggerMessage(Level = LogLevel.Warning,
+            Message = "Domain event {DomainEvent} was raised but no handler is registered for it; skipping.")]
+        private static partial void LogUnhandledDomainEvent(ILogger logger, string domainEvent);
     }
 }

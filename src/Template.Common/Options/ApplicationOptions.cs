@@ -10,6 +10,11 @@
         public string LogUrl { get; set; } = null!;
         public string ClientSecret { get; set; } = null!;
         public string MetadataAddress { get; set; } = null!;
+        /// <summary>
+        /// Requires the JWT authority's metadata to be fetched over HTTPS. Only turn this off
+        /// for a local identity provider served over plain HTTP.
+        /// </summary>
+        public bool RequireHttpsMetadata { get; set; } = true;
 
         public string SensitiveDataKeys { get; set; } = null!;
         public string SensitiveDataDefaultValues { get; set; } = null!;

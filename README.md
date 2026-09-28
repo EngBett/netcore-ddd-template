@@ -331,8 +331,10 @@ MyApp/
 │   │   ├── Endpoints/                         # [fastendpoints style] FastEndpoints classes
 │   │   │   └── TestEndpoint.cs
 │   │   ├── Filters/
+│   │   │   ├── ClientErrorResponse.cs         # Shared map: validation / domain / unique-constraint exception → 400 payload
+│   │   │   ├── ServerErrorResponse.cs         # Shared 500 payload with a logged error code
 │   │   │   ├── GlobalExceptionFilter.cs       # Translates exceptions → HTTP error responses (controllers only)
-│   │   │   └── ValidationExceptionMiddleware.cs # Maps ValidationException → 400 for Minimal API / FastEndpoints
+│   │   │   └── ExceptionResponseMiddleware.cs # Same responses for Minimal API / FastEndpoints
 │   │   ├── Services/
 │   │   │   └── CurrentUserService.cs          # Reads claims from the JWT token
 │   │   ├── Properties/
@@ -415,7 +417,7 @@ MyApp/
 │
 └── tests/
     └── MyApp.Tests/                       # Reqnroll (Gherkin) specifications
-        ├── Features/                      #   Cqrs / DomainEvents / BrokerRouting .feature
+        ├── Features/                      #   Cqrs / DomainEvents / BrokerRouting / HttpResponses .feature
         ├── Steps/                          #   Step definitions
         └── Support/                        #   Boots the real composition root once per run
 ```
@@ -456,13 +458,15 @@ HTTP Request
 - EF Core **unique-constraint** violations (SQL Server, PostgreSQL, SQLite, MySQL) → `400 Bad Request` with a human-readable or provider message
 - Any other exception → `500 Internal Server Error` (with full detail in Development)
 
-`GlobalExceptionFilter` is an MVC `IExceptionFilter`, so it only runs for the **controllers** style. Because validation now runs as Wolverine middleware and throws, the Minimal API and FastEndpoints styles need their own mapping or they would return a bare `500` for a bad request. `ValidationExceptionMiddleware` (registered first in `ConfigureMiddleware`) covers them, producing the identical payload:
+`GlobalExceptionFilter` is an MVC `IExceptionFilter`, so it only runs for the **controllers** style. The Minimal API and FastEndpoints styles need their own mapping or they would return a bare `500` for a bad request. `ExceptionResponseMiddleware` (registered first in `ConfigureMiddleware`) covers them. Both use `ClientErrorResponse` for the `400`s and `ServerErrorResponse` for the `500`, so every case above produces the identical status and payload in every style:
 
 ```json
 { "result": null, "message": "'User Id' must not be empty.", "errors": ["'User Id' must not be empty."] }
 ```
 
-It catches validation failures **only** and rethrows everything else, so non-validation exceptions keep the behaviour they had before. Note that Wolverine also logs each validation failure at `Error` level; tune that with `opts.Policies.MessageExecutionLogLevel(...)` if client errors are noisy in your logs.
+A server fault gets a `500` whose `message` ends in `Error Code: <id>`; the same id is on the logged exception. In Development the message carries the full exception instead of the developer exception page, the same for every style. The middleware leaves two cases alone: a response that has already started, and a request the client aborted.
+
+A handler that returns an `ApiResponse<T>` with `Code = NotFound` or `Fail` gets a `404` or `400` in every style: `BaseController.CustomResponse` does it for controllers, and `ApiResponseResults.ToHttpResult()` for Minimal API and FastEndpoints. Keep the two in step. Note that Wolverine also logs each validation failure at `Error` level; tune that with `opts.Policies.MessageExecutionLogLevel(...)` if client errors are noisy in your logs.
 
 ---
 
@@ -492,11 +496,12 @@ All settings live in `appsettings.json`. Override them with environment variable
   },
   "ApplicationOptions": {
     "LogUrl": "http://localhost:5341",
+    "AllowedOrigins": [],
     "Authority": "",
     "Audience": "/resources",
     "Queue": "",
     "ClientId": "",
-    "ClientSecret": "secret",
+    "ClientSecret": "",
     "SensitiveDataKeys": "pan,authorization,secret,...",
     "SensitiveDataDefaultValues": "pan,authorization,...",
     "EnableAutoMigration": true,
@@ -526,14 +531,15 @@ All settings live in `appsettings.json`. Override them with environment variable
 | `RabbitMQOptions.UserName` / `Password`         | Broker credentials                                                                                                    |
 | `RabbitMQOptions.VirtualHost`                   | Virtual host (e.g. `**/`** for the default vhost)                                                                     |
 | `ApplicationOptions.LogUrl`                     | Seq or other structured log sink URL (used when configuring Serilog)                                                  |
+| `ApplicationOptions.AllowedOrigins`             | Browser origins allowed to call the API cross-origin, with credentials. Empty (the default) allows none               |
 | `ApplicationOptions.Authority`                  | JWT authority (your identity provider URL)                                                                            |
 | `ApplicationOptions.Audience`                   | JWT audience                                                                                                          |
 | `ApplicationOptions.MetadataAddress`            | Optional OIDC metadata path or URL fragment                                                                           |
 | `ApplicationOptions.SensitiveDataKeys`          | Comma-separated keys to redact in logs                                                                                |
 | `ApplicationOptions.EnableAutoMigration`        | When true, `Program` applies EF Core migrations on startup                                                            |
 | `ApplicationOptions.UseLoggerMiddleWare`        | Feature flag for request logging middleware (if wired)                                                                |
-| `ApplicationOptions.RequireHttpsMetadata`       | Passed to JWT bearer metadata retrieval when configured                                                               |
-| `ApplicationOptions.ShowSwagger`                | When true, Swagger UI is registered in the HTTP pipeline (`src/Template.Api/DependencyInjection.ConfigureMiddleware`)     |
+| `ApplicationOptions.RequireHttpsMetadata`       | Require the JWT authority's metadata over HTTPS (default **true**; turn off only for a local plain-HTTP identity provider) |
+| `ApplicationOptions.ShowSwagger`                | Enables Swagger UI outside Development; it is always on in Development (`src/Template.Api/DependencyInjection.ConfigureMiddleware`) |
 
 
 ## Messaging (Wolverine + RabbitMQ)
@@ -697,7 +703,7 @@ dotnet run --project aspire/MyApp.AppHost -- --publisher manifest --output-path 
 - **`DatabaseKind` is not injected.** The `appsettings.json` that ships with the provider you chose already sets it, and it stays the single source of truth.
 - **SQLite has no resource.** It is a file, not a service, so the AppHost injects no connection string and the API keeps the `DATABASE_CON` from its own `appsettings.json`.
 - **Serilog and Prometheus stay as they are.** ServiceDefaults adds OpenTelemetry alongside them rather than replacing them: Serilog still writes to console and Seq, `/metrics` still serves Prometheus, and OTLP export is switched on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is present.
-- **Serilog's Seq sink is configured twice.** `ApplicationOptions.LogUrl` (which the AppHost sets) drives the sink added in `Program.cs`, while the `Serilog:WriteTo` section in `appsettings.json` hardcodes `http://localhost:5341`. That duplication predates Aspire; only the first is orchestrated.
+- **Serilog's sinks are added in code.** `Program.cs` adds Console, plus Seq at `ApplicationOptions.LogUrl` (which the AppHost sets). Don't also list them under `Serilog:WriteTo` in `appsettings.json`, or every log line is written twice.
 - **In this repository the AppHost contains every database branch**, the same way `MyApp.Infrastructure` references every EF Core provider. `dotnet new` keeps exactly one. Running the template's own AppHost therefore starts more than one database server, which is why each branch names its database resource after its provider — Aspire rejects duplicate resource names.
 ---
 
@@ -714,9 +720,10 @@ tests/MyApp.Tests/
 ├── Features/
 │   ├── Cqrs.feature           # dispatch, validation, and that rejection is immediate
 │   ├── DomainEvents.feature   # events reach handlers; an unhandled one does not fail the write
-│   └── BrokerRouting.feature  # only declared contracts are routed to RabbitMQ
+│   ├── BrokerRouting.feature  # only declared contracts are routed to RabbitMQ
+│   └── HttpResponses.feature  # status codes and bodies a client sees, in any API style
 ├── Steps/                     # step definitions
-└── Support/                   # TestHost, test DbContext, spy handler
+└── Support/                   # TestHost, ApiHost, test DbContext, spy handler, query faults
 ```
 
 ### The suite runs the real composition root
@@ -727,6 +734,10 @@ tests/MyApp.Tests/
 - **the database is SQLite in memory**, so no server is needed.
 
 That means `dotnet test` needs no Docker and no infrastructure, and it stays fast enough to run on every build.
+
+### HTTP scenarios run the real API
+
+`Support/ApiHost.cs` boots the API's own `Program` in memory with `WebApplicationFactory`, so `HttpResponses.feature` exercises whichever API style the service was scaffolded with — the same scenarios pass for controllers, Minimal APIs and FastEndpoints. It makes the same two substitutions as `TestHost`, plus two of its own: auto-migration is switched off, and `Support/QueryFaults.cs` adds a Wolverine middleware to the sample `GetTodosQuery` so a scenario can make it fail validation, break a business rule, report not found or throw. The endpoint, the exception filter or middleware, and the response mapping are all the shipped code.
 
 Two details worth knowing if you extend it:
 
@@ -739,7 +750,6 @@ The suite asserts behaviour through public APIs, so it stops where that would re
 
 - **Retry scoping is asserted by its consequence, not its configuration.** Rather than inspecting handler chains for failure rules, `Cqrs.feature` asserts that a rejected command comes back in under 250 ms. Apply the retry policy globally instead of per broker contract and that scenario fails — it took 8 seconds when tried.
 - **Nothing talks to a real broker or database.** For that, `Aspire.Hosting.Testing` can start the AppHost's containers in a test; it needs a container runtime, so it is not wired up here.
-- **HTTP-level behaviour is not covered**, because the three API styles expose their endpoints differently and a single suite would need conditional code per style. The validation-to-400 mapping described under [Error handling](#data-flow-request-lifecycle) is the main thing this leaves untested.
 
 ---
 

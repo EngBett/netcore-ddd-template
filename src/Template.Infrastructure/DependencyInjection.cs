@@ -68,16 +68,19 @@ public static class DependencyInjection
     {
         var appSettingsSection = configuration.GetSection("ApplicationOptions");
         services.Configure<ApplicationOptions>(appSettingsSection);
-        var appSettings = appSettingsSection.Get<ApplicationOptions>();
+        var appSettings = appSettingsSection.Get<ApplicationOptions>() ?? new ApplicationOptions();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                options.Authority = appSettings!.Authority;
-                // options.RequireHttpsMetadata = true;
+                options.Authority = appSettings.Authority;
+                options.RequireHttpsMetadata = appSettings.RequireHttpsMetadata;
                 // name of the API resource
                 options.Audience = appSettings.Audience;
                 // options.MetadataAddress = appSettings.MetadataAddress;
-                options.BackchannelHttpHandler = new HttpClientHandler { ServerCertificateCustomValidationCallback = delegate { return true; } };
+                // No custom BackchannelHttpHandler: the signing keys are fetched from the
+                // authority over this channel, so accepting any certificate would let whoever
+                // can intercept that call mint tokens this API trusts. For an identity
+                // provider on a self-signed certificate, trust its CA on the host instead.
             });
         services.AddAuthorizationBuilder()
             .SetDefaultPolicy(new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
