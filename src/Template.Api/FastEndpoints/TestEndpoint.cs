@@ -1,5 +1,6 @@
 using FastEndpoints;
 using Wolverine;
+using Template.Api.Extensions;
 using Template.Application.Features.Todos.Models;
 using Template.Application.Features.Todos.Queries;
 using Template.Common.Models;
@@ -23,6 +24,6 @@ public class TestEndpoint(IMessageBus bus) : Endpoint<TestRequest, ApiResponse<I
     {
         var query = new GetTodosQuery { UserId = req.UserId };
         var response = await bus.InvokeAsync<ApiResponse<IEnumerable<TodoDto>>>(query, ct);
-        await Send.OkAsync(response, ct);
+        await Send.ResultAsync(response.ToHttpResult());
     }
 }

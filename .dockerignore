@@ -1,0 +1,34 @@
+# Docker reads this file only from the root of the build context. The Dockerfile builds
+# with the repository root as its context, so this file must live here: next to the
+# Dockerfile it is silently ignored, and `COPY . .` then drags in the host's bin/ and obj/,
+# whose project.assets.json breaks the `--no-restore` build.
+**/.dockerignore
+**/.env
+**/.git
+**/.gitignore
+**/.project
+**/.settings
+**/.toolstarget
+**/.vs
+**/.vscode
+**/.idea
+**/*.*proj.user
+**/*.dbmdl
+**/*.jfm
+**/azds.yaml
+**/bin
+**/charts
+**/docker-compose*
+**/Dockerfile*
+**/node_modules
+**/npm-debug.log
+**/obj
+**/secrets.dev.yaml
+**/values.dev.yaml
+LICENSE
+README.md
+**/.claude
+**/.cursor
+**/.github
+**/TestResults
+**/nupkg

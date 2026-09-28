@@ -32,6 +32,7 @@ Feature: Dispatching commands and queries
     And there are exactly 2 validation failures
 
   Scenario: A rejected command fails immediately rather than being retried
+    Given a create todo command has already been handled once
     When I dispatch a create todo command titled "" described as ""
     Then the dispatch is rejected as invalid
     And the rejection took less than 250 milliseconds

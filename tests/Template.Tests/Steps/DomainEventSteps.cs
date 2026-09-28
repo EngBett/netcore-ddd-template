@@ -44,11 +44,11 @@ public class DomainEventSteps
     }
 
     [Then("the todo created event handler ran once")]
-    public void ThenTheTodoCreatedEventHandlerRanOnce() =>
+    public static void ThenTheTodoCreatedEventHandlerRanOnce() =>
         Assert.Equal(1, SpyTodoCreatedHandler.Invocations);
 
     [Then("the todo created event handler did not run")]
-    public void ThenTheTodoCreatedEventHandlerDidNotRun() =>
+    public static void ThenTheTodoCreatedEventHandlerDidNotRun() =>
         Assert.Equal(0, SpyTodoCreatedHandler.Invocations);
 
     [Then("the save succeeds")]

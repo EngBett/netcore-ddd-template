@@ -19,10 +19,13 @@
              scaffolded with, so it needs its own reference rather than relying on
              whichever provider Infrastructure pulled in. -->
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+        <!-- Boots the API's own Program in memory for the HTTP scenarios (Support/ApiHost.cs). -->
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\..\src\Template.Api\Template.Api.csproj" />
         <ProjectReference Include="..\..\src\Template.Application\Template.Application.csproj" />
         <ProjectReference Include="..\..\src\Template.Infrastructure\Template.Infrastructure.csproj" />
     </ItemGroup>

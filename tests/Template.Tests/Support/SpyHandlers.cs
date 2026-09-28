@@ -13,13 +13,15 @@ public class UnhandledTestEvent : IDomainEvent;
 /// </summary>
 public class SpyTodoCreatedHandler
 {
-    public static int Invocations;
+    private static int _invocations;
 
-    public static void Reset() => Interlocked.Exchange(ref Invocations, 0);
+    public static int Invocations => Volatile.Read(ref _invocations);
 
-    public Task Handle(TodoCreatedEvent notification)
+    public static void Reset() => Interlocked.Exchange(ref _invocations, 0);
+
+    public static Task Handle(TodoCreatedEvent notification)
     {
-        Interlocked.Increment(ref Invocations);
+        Interlocked.Increment(ref _invocations);
         return Task.CompletedTask;
     }
 }
