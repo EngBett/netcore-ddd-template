@@ -22,7 +22,8 @@ namespace Template.Tests.Support;
 /// Substitutes the same two things as <see cref="TestHost"/> — external transports disabled,
 /// SQLite in memory — plus two that only an HTTP host needs:
 /// <list type="bullet">
-///   <item>auto-migration is off, since the provider in appsettings.json is not running;</item>
+///   <item>auto-migration and durable messaging are off, since the provider in appsettings.json
+///   is not running;</item>
 ///   <item><see cref="QueryFaults.Middleware"/> wraps the sample query, so a scenario can make
 ///   it fail in a chosen way.</item>
 /// </list>
@@ -45,11 +46,23 @@ public static class ApiHost
 
     private sealed class Factory : WebApplicationFactory<Program>
     {
+        private const string DurableSetting = "DurableMessagingOptions__Enabled";
+
         private readonly SqliteConnection _connection = new("DataSource=:memory:");
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             _connection.Open();
+
+            // The shipped PostgreSQL and SQL Server settings turn durable messaging on, and it
+            // needs that database. This suite runs on SQLite and must not need Docker; the
+            // durable guarantees are covered by Template.DurableTests.
+            //
+            // An environment variable, not configuration added below: durable messaging is
+            // wired while Program is still registering services, and Program re-adds
+            // appsettings.json after the host's own settings, so only the environment source
+            // (added last) can override it by then.
+            Environment.SetEnvironmentVariable(DurableSetting, "false");
 
             builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
@@ -79,7 +92,10 @@ public static class ApiHost
         {
             base.Dispose(disposing);
             if (disposing)
+            {
                 _connection.Dispose();
+                Environment.SetEnvironmentVariable(DurableSetting, null);
+            }
         }
     }
 }

@@ -37,13 +37,28 @@ namespace Template.Application
             (typeof(TodoMessage), "todo-message")
         ];
 
-        public static IServiceCollection AddApplicationDependencies(this IServiceCollection services, IConfiguration configuration)
+        /// <param name="services">The service collection.</param>
+        /// <param name="configuration">Application configuration.</param>
+        /// <param name="configureWolverine">
+        /// Lets the composition root add Wolverine configuration that this layer cannot own,
+        /// because it needs types from Infrastructure (durable messaging is the case in point).
+        /// It has to be a callback rather than <c>ConfigureWolverine</c>: Wolverine forbids
+        /// extensions registered in the container from changing service registrations, which
+        /// persistence and EF Core transaction support both do.
+        /// </param>
+        public static IServiceCollection AddApplicationDependencies(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            Action<WolverineOptions>? configureWolverine = null)
         {
-            services.RegisterWolverineDependencies(configuration);
+            services.RegisterWolverineDependencies(configuration, configureWolverine);
             return services;
         }
 
-        private static IServiceCollection RegisterWolverineDependencies(this IServiceCollection services, IConfiguration configuration)
+        private static IServiceCollection RegisterWolverineDependencies(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            Action<WolverineOptions>? configureWolverine)
         {
             services.Configure<RabbitMQOptions>(configuration.GetSection(nameof(RabbitMQOptions)));
             services.Configure<MessagingOptions>(configuration.GetSection(nameof(MessagingOptions)));
@@ -110,6 +125,8 @@ namespace Template.Application
                 // Retries are scoped to the broker contracts, never applied globally. See
                 // BrokerResiliencePolicy for why that distinction matters.
                 opts.Policies.Add(new BrokerResiliencePolicy(messaging, BrokerContracts.Select(c => c.Contract)));
+
+                configureWolverine?.Invoke(opts);
             });
 
             return services;

@@ -549,6 +549,10 @@ All settings live in `appsettings.json`. Override them with environment variable
 - **Example consumer**: `src/Template.Application/Consumers/TodoMessageConsumer.cs`. Wolverine has **no `IConsumer<T>` to implement**—a class whose name ends in `Consumer` (or `Handler`) with a `Consume`/`Handle` method is discovered by convention, and the message type is taken from the first parameter. The message type is `src/Template.Common/Messages/Todos/TodoMessage.cs`.
 - **Publishing**: inject `**IMessageBus**` and call `**PublishAsync**` / `**SendAsync**` with `TodoMessage` (or your own contract types). This replaces MassTransit's `IPublishEndpoint` / `ISendEndpointProvider` / `IBus`.
 
+### Durable messaging (PostgreSQL and SQL Server)
+
+On by default for those two providers. Handlers that depend on `IApplicationContext` run in a single transaction that also stores outgoing messages and domain events (the transactional outbox), and incoming broker messages are recorded in an inbox. Configure it with `DurableMessagingOptions` in `appsettings.json`. Outside Development, create the schema once with `dotnet run --project src/Template.Api -- resources setup` and leave `AutoBuildStorage` false. See `AGENTS.md`, "Durable messaging", for the rules this imposes on handlers and sagas.
+
 ### What crosses the broker is opt-in
 
 Because Wolverine is also the mediator, every command, query and domain event in the Application layer is a "message" to it. Broker routing is therefore declared per contract, in one place:

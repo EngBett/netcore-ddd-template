@@ -45,6 +45,30 @@ namespace Template.Infrastructure.Extensions
             }
         }
 
+        /// <summary>
+        /// Publishes the tracked entities' domain events through the message bus instead of
+        /// invoking their handlers inline, for use when durable messaging is on.
+        /// </summary>
+        /// <remarks>
+        /// Inside a handler that Wolverine is wrapping in a transaction, <c>PublishAsync</c>
+        /// writes the message to the outbox in that same transaction, so the event is stored
+        /// if and only if the commit stands, and is delivered at least once after a crash.
+        /// An event nobody handles is simply not delivered, so no guard is needed here.
+        /// </remarks>
+        public static async Task PublishDomainEventsAsync(this IMessageBus bus, ApplicationContext ctx)
+        {
+            var domainEntities = ctx.ChangeTracker
+                .Entries<BaseEntity>()
+                .Where(x => x.Entity.DomainEvents.Count > 0)
+                .ToList();
+
+            var domainEvents = domainEntities.SelectMany(x => x.Entity.DomainEvents).ToList();
+            domainEntities.ForEach(entity => entity.Entity.ClearDomainEvents());
+
+            foreach (var domainEvent in domainEvents)
+                await bus.PublishAsync(domainEvent);
+        }
+
         [LoggerMessage(Level = LogLevel.Warning,
             Message = "Domain event {DomainEvent} was raised but no handler is registered for it; skipping.")]
         private static partial void LogUnhandledDomainEvent(ILogger logger, string domainEvent);
