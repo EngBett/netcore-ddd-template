@@ -17,7 +17,7 @@ public class ApplicationContext : DbContext, IApplicationContext
 {
     private readonly IMessageBus _bus;
     private readonly ILogger<ApplicationContext> _logger;
-    private readonly bool _wolverinePublishesDomainEvents;
+    private readonly bool _durableMessaging;
 
     public ApplicationContext(
         DbContextOptions<ApplicationContext> options,
@@ -41,24 +41,34 @@ public class ApplicationContext : DbContext, IApplicationContext
     {
         _bus = bus;
         _logger = logger;
-        _wolverinePublishesDomainEvents = durableMessaging?.Value.Enabled ?? false;
+        _durableMessaging = durableMessaging?.Value.Enabled ?? false;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Entity and saga mappings live in DataAccess/EntityConfigurations, one
+        // IEntityTypeConfiguration<T> each, and are picked up here without being listed.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationContext).Assembly);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var n = await base.SaveChangesAsync(cancellationToken);
 
-        // With durable messaging on, Wolverine scrapes the entities' domain events from the
-        // change tracker inside the handler's transaction and stores them in the outbox, so
-        // they are published if and only if this commit stands. Dispatching them here as well
-        // would run every handler twice, and would do it after the commit, where a crash
-        // loses the event.
-        if (!_wolverinePublishesDomainEvents)
+        // Durable messaging on: publish the events through the bus rather than invoking their
+        // handlers inline. Inside a handler's transaction that stores them in the outbox in the
+        // same commit, so they are delivered at least once even if the process dies right
+        // after. Dispatching inline would run the handlers before the commit stands and lose
+        // the event on a crash.
+        //
+        // Wolverine's own EF Core domain-event scraping is deliberately not used: in testing the
+        // events it enqueued were handled but never written to the inbox, so a restart lost
+        // them, whereas a plain PublishAsync was stored and survived.
+        if (_durableMessaging)
+            await _bus.PublishDomainEventsAsync(this);
+        else
             await _bus.DispatchDomainEventsAsync(this, _logger);
 
         return n;

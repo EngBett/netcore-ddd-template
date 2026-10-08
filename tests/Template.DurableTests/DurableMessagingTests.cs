@@ -1,4 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Wolverine;
 using Wolverine.Tracking;
 
 namespace Template.DurableTests;
@@ -128,5 +130,47 @@ public class DurableMessagingTests(PostgresFixture postgres)
         var error = await Assert.ThrowsAnyAsync<Exception>(() => host.StartAsync());
 
         Assert.Contains("AddDurableMessaging", error.ToString());
+    }
+
+    [Fact]
+    public async Task An_event_committed_but_not_yet_handled_is_handled_by_the_next_host()
+    {
+        var cs = await postgres.CreateDatabaseAsync();
+        var id = NewId();
+
+        // First host: the row commits and its event is stored, then the event handler parks,
+        // so the event is in flight when the host stops.
+        WidgetCreatedHandler.Blocked[id] = true;
+        using (var first = DurableHost.Build(cs))
+        {
+            await first.StartAsync();
+            await DurableHost.CreateWidgetTableAsync(first);
+            await using (var scope = first.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IMessageBus>()
+                    .InvokeAsync(new CreateWidget(id, RaiseCreated: true, RaiseArchived: false, ThrowAfterSave: false));
+            }
+
+            Assert.Equal(1, await DurableHost.CountAsync(cs, id));
+            Assert.Equal(0, WidgetCreatedHandler.CountFor(id));
+            await first.StopAsync(TimeSpan.FromSeconds(10));
+        }
+
+        // Second host, same database: nothing re-sends the command. The event is only in the
+        // inbox, and it has to be picked up from there.
+        WidgetCreatedHandler.Blocked.TryRemove(id, out _);
+        using var second = DurableHost.Build(cs, autoBuildStorage: false);
+        await second.StartAsync();
+
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (WidgetCreatedHandler.CountFor(id) == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(500);
+
+        var diagnostics = string.Join(" | ", await new SagaQueries(cs).RowsAsync(
+            "select 'incoming ' || status || ' owner=' || owner_id || ' attempts=' || attempts from wolverine.wolverine_incoming_envelopes "
+            + "union all select 'dead ' || coalesce(exception_type,'?') from wolverine.wolverine_dead_letters "
+            + "union all select 'outgoing ' || owner_id from wolverine.wolverine_outgoing_envelopes "
+            + "union all select 'node ' || node_number || ' ' || coalesce(description,'') from wolverine.wolverine_nodes"));
+        Assert.True(WidgetCreatedHandler.CountFor(id) == 1, diagnostics);
     }
 }

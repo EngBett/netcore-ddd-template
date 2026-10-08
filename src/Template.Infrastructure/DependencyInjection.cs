@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using JasperFx;
 using Template.Application.Interfaces;
 using Template.Common.Options;
-using Template.Domain.Models;
 using Template.Infrastructure.DataAccess;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
@@ -150,9 +149,11 @@ public static class DependencyInjection
                 break;
             //#endif
             default:
-                throw new InvalidOperationException(
-                    $"Durable messaging is not available for DatabaseKind '{databaseKind}'. "
-                    + "It supports PostgreSQL and SQL Server; set DurableMessagingOptions:Enabled to false.");
+                // A method rather than a throw statement: in a SQLite or MySQL scaffold this
+                // switch has no other case, and a bare throw would make everything after it
+                // unreachable (CS0162), which the scaffolds must not warn about.
+                ThrowDurableMessagingUnsupported(databaseKind);
+                break;
         }
 
         // Without CreateOrUpdate the host will not touch the schema, and fails fast with a
@@ -169,10 +170,12 @@ public static class DependencyInjection
         opts.Policies.UseDurableLocalQueues();
         opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
         opts.Policies.UseDurableInboxOnAllListeners();
-
-        // Domain events leave the entity inside the same transaction as the data.
-        opts.PublishDomainEventsFromEntityFrameworkCore<BaseEntity>(entity => entity.DomainEvents);
     }
+
+    private static void ThrowDurableMessagingUnsupported(string databaseKind) =>
+        throw new InvalidOperationException(
+            $"Durable messaging is not available for DatabaseKind '{databaseKind}'. "
+            + "It supports PostgreSQL and SQL Server; set DurableMessagingOptions:Enabled to false.");
 
     private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
     {

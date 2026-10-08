@@ -7,6 +7,7 @@ using Template.Common.Options;
 using Template.Domain.DomainEvents;
 using Template.Domain.Models;
 using Template.Infrastructure.DataAccess;
+using Template.Infrastructure.DataAccess.Extension;
 using Wolverine;
 
 namespace Template.DurableTests;
@@ -33,6 +34,12 @@ public class WidgetContext(
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.Entity<Widget>().HasKey(w => w.Id);
+
+        // The saga is mapped here because this assembly's IEntityTypeConfiguration is not in
+        // the one ApplyConfigurationsFromAssembly scans; a service would put it in
+        // DataAccess/EntityConfigurations and call ConfigureSaga from the configuration.
+        modelBuilder.ApplyConfiguration(new OrderSagaConfiguration());
+        modelBuilder.ConfigureSaga<OrderSaga>();
     }
 }
 
@@ -58,7 +65,16 @@ public static class WidgetCreatedHandler
 {
     public static readonly ConcurrentDictionary<string, int> Seen = new();
 
-    public static void Handle(WidgetCreated created) => Seen.AddOrUpdate(created.WidgetId, 1, (_, n) => n + 1);
+    /// <summary>Ids whose handler parks until the host stops, to leave an event in flight.</summary>
+    public static readonly ConcurrentDictionary<string, bool> Blocked = new();
+
+    public static async Task Handle(WidgetCreated created, CancellationToken cancellation)
+    {
+        if (Blocked.ContainsKey(created.WidgetId))
+            await Task.Delay(Timeout.Infinite, cancellation);
+
+        Seen.AddOrUpdate(created.WidgetId, 1, (_, n) => n + 1);
+    }
 
     public static int CountFor(string id) => Seen.TryGetValue(id, out var n) ? n : 0;
 }
