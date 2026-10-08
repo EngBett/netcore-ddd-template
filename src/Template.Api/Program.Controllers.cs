@@ -1,3 +1,4 @@
+using JasperFx;
 using System.Globalization;
 using Template.Api;
 using Template.Application;
@@ -18,7 +19,9 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddApiDependencies(builder.Configuration);
-builder.Services.AddApplicationDependencies(builder.Configuration);
+builder.Services.AddApplicationDependencies(
+    builder.Configuration,
+    opts => opts.AddDurableMessaging<ApplicationContext>(builder.Configuration));
 builder.Services.AddInfrastructureDependencies(builder.Configuration);
 // Seq comes from ApplicationOptions.LogUrl. Hardcoding it means logs silently
 // go nowhere in every environment except a developer's laptop.
@@ -60,4 +63,6 @@ if (applicationOptions.EnableAutoMigration)
 
 app.ConfigureMiddleware();
 app.MapDefaultEndpoints();
-app.Run();
+// Runs the web host by default, and also exposes Wolverine's operational commands, notably
+// `resources setup`, which creates the durable-messaging schema without starting the service.
+return await app.RunJasperFxCommands(args);

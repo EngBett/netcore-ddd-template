@@ -246,6 +246,12 @@
             "src/Template.Api/appsettings.Database.postgres.json",
             "src/Template.Api/appsettings.Database.sqlite.json"
           ]
+        },
+        {
+          "condition": "(!usePostgres)",
+          "exclude": [
+            "tests/Template.DurableTests/**"
+          ]
         }
       ]
     }

@@ -3,7 +3,9 @@ using System.ComponentModel;
 using System.Data;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Template.Application.Interfaces;
+using Template.Common.Options;
 using Template.Domain.Models;
 using Template.Infrastructure.Extensions;
 using Microsoft.EntityFrameworkCore;
@@ -15,12 +17,31 @@ public class ApplicationContext : DbContext, IApplicationContext
 {
     private readonly IMessageBus _bus;
     private readonly ILogger<ApplicationContext> _logger;
+    private readonly bool _wolverinePublishesDomainEvents;
 
-    public ApplicationContext(DbContextOptions<ApplicationContext> options, IMessageBus bus, ILogger<ApplicationContext> logger)
+    public ApplicationContext(
+        DbContextOptions<ApplicationContext> options,
+        IMessageBus bus,
+        ILogger<ApplicationContext> logger,
+        IOptions<DurableMessagingOptions>? durableMessaging = null)
+        : this((DbContextOptions)options, bus, logger, durableMessaging)
+    {
+    }
+
+    /// <summary>
+    /// For a derived context registered with its own <c>DbContextOptions&lt;TContext&gt;</c>,
+    /// which cannot be passed to the typed constructor above.
+    /// </summary>
+    protected ApplicationContext(
+        DbContextOptions options,
+        IMessageBus bus,
+        ILogger<ApplicationContext> logger,
+        IOptions<DurableMessagingOptions>? durableMessaging = null)
         : base(options)
     {
         _bus = bus;
         _logger = logger;
+        _wolverinePublishesDomainEvents = durableMessaging?.Value.Enabled ?? false;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -31,7 +52,15 @@ public class ApplicationContext : DbContext, IApplicationContext
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var n = await base.SaveChangesAsync(cancellationToken);
-        await _bus.DispatchDomainEventsAsync(this, _logger);
+
+        // With durable messaging on, Wolverine scrapes the entities' domain events from the
+        // change tracker inside the handler's transaction and stores them in the outbox, so
+        // they are published if and only if this commit stands. Dispatching them here as well
+        // would run every handler twice, and would do it after the commit, where a crash
+        // loses the event.
+        if (!_wolverinePublishesDomainEvents)
+            await _bus.DispatchDomainEventsAsync(this, _logger);
+
         return n;
     }
 
